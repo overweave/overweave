@@ -1,0 +1,35 @@
+{
+  "name": "overweave",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/overweave/overweave.git"
+  },
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "build": "npm run build -w @overweave/core && npm run build -w @overweave/ui && npm run build -w @overweave/testkit && npm run build -w @overweave/storybook",
+    "check:dist": "node scripts/check-dist.mjs",
+    "bench": "BENCH=1 vitest run --project 'bench:*' --reporter=dot",
+    "pack": "rm -rf packed && mkdir packed && npm pack --workspaces --pack-destination packed",
+    "check:version": "node scripts/check-version.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@vitest/coverage-v8": "5.0.3",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

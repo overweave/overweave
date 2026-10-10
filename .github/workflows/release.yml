@@ -1,0 +1,40 @@
+# A release on GitHub for a tag `v<version>` (the version every package has): checked as a push is,
+# each package packed (`npm pack`), the tarballs attached to the release — installable from its URL.
+# Nothing goes to npm. A 0.x version is released as a pre-release.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+
+  release:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: The tag is every package's version
+        run: node scripts/check-version.mjs "${GITHUB_REF_NAME#v}"
+      - run: npm run build
+      - run: npm run pack
+      - name: The release, its packages attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""
+          case "$GITHUB_REF_NAME" in v0.*|*-*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" packed/*.tgz --title "$GITHUB_REF_NAME" --generate-notes --verify-tag $pre

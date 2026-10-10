@@ -1,0 +1,33 @@
+{
+  "name": "@overweave/core",
+  "version": "0.1.0",
+  "description": "Definitions of kinds, and what contributors say of them, layered: the highest priority wins, every field knows who says it, what is read holds the kind's contract — nothing else, no dependencies",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/overweave/overweave.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/overweave/overweave/tree/main/packages/core#readme",
+  "bugs": {
+    "url": "https://github.com/overweave/overweave/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "overweave-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.test.tsx"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  }
+}

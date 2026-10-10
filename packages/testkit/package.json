@@ -1,0 +1,62 @@
+{
+  "name": "@overweave/testkit",
+  "version": "0.1.0",
+  "description": "Testing what is built on overweave: a world of kinds and contributors, an addon run and stopped, what each said, the events; with Preact, a slot drawn on its own and its renders counted",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/overweave/overweave.git",
+    "directory": "packages/testkit"
+  },
+  "homepage": "https://github.com/overweave/overweave/tree/main/packages/testkit#readme",
+  "bugs": {
+    "url": "https://github.com/overweave/overweave/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "overweave-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./preact": {
+      "overweave-source": "./src/preact/index.ts",
+      "types": "./dist/preact/index.d.ts",
+      "default": "./dist/preact/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.test.tsx"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@overweave/core": "^0.1.0",
+    "@overweave/ui": "^0.1.0",
+    "@preact/signals": "^2.11.2",
+    "preact": "^10.29.8"
+  },
+  "peerDependenciesMeta": {
+    "@overweave/ui": {
+      "optional": true
+    },
+    "@preact/signals": {
+      "optional": true
+    },
+    "preact": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@overweave/core": "0.1.0",
+    "@overweave/ui": "0.1.0",
+    "@preact/signals": "2.11.2",
+    "happy-dom": "20.14.5",
+    "preact": "10.29.8"
+  }
+}

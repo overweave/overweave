@@ -1,0 +1,19 @@
+# Updates proposed once a week: the workflows' actions, and the workspace's npm packages (grouped, so one
+# pull request a week at most for each; a major version of a package on its own).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

@@ -1,0 +1,131 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": ["**", "!**/dist"]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 180
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+  "linter": {
+    "rules": {
+      "preset": "recommended"
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/core/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["preact", "preact/**", "@preact/**", "react", "react/**", "@overweave/ui", "@overweave/ui/**"],
+                    "message": "The core draws nothing and knows no UI: no framework, no @overweave/ui (that is built over it)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/ui/src/*.ts", "!packages/ui/src/*.test.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["preact", "preact/**", "@preact/**", "react", "react/**"],
+                    "message": "@overweave/ui draws nothing: no framework here (that is @overweave/ui/preact's)."
+                  },
+                  {
+                    "group": ["@overweave/testkit", "@overweave/testkit/**"],
+                    "message": "The testkit is for @overweave/ui's tests only."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/ui/src/preact/**", "!**/*.test.ts", "!**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@overweave/testkit", "@overweave/testkit/**"],
+                    "message": "The testkit is for @overweave/ui's tests only."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/testkit/src/*.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["preact", "preact/**", "@preact/**", "react", "react/**", "@overweave/ui/preact"],
+                    "message": "@overweave/testkit is framework-free: Preact is @overweave/testkit/preact's."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
