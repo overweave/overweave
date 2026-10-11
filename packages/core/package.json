@@ -8,6 +8,9 @@
     "url": "git+https://github.com/overweave/overweave.git",
     "directory": "packages/core"
   },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "homepage": "https://github.com/overweave/overweave/tree/main/packages/core#readme",
   "bugs": {
     "url": "https://github.com/overweave/overweave/issues"

@@ -1,6 +1,7 @@
-# A release on GitHub for a tag `v<version>` (the version every package has): checked as a push is,
-# each package packed (`npm pack`), the tarballs attached to the release — installable from its URL.
-# Nothing goes to npm. A 0.x version is released as a pre-release.
+# A release for a tag `v<version>` (the version every package has): checked as a push is, each
+# package published to GitHub's npm registry (npm.pkg.github.com, under @overweave), then a release on
+# GitHub with each package's tarball (`npm pack`) attached. Nothing goes to npmjs.com. A 0.x version
+# is released as a pre-release; a version with a `-` is published under the `next` tag, not `latest`.
 name: release
 
 on:
@@ -20,17 +21,27 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@overweave'
       - run: npm ci --no-audit --no-fund
       - name: The tag is every package's version
         run: node scripts/check-version.mjs "${GITHUB_REF_NAME#v}"
       - run: npm run build
       - run: npm run pack
+      - name: The packages, in GitHub's registry
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: |
+          tag="latest"
+          case "$GITHUB_REF_NAME" in *-*) tag="next" ;; esac
+          npm publish --workspaces --tag "$tag"
       - name: The release, its packages attached
         env:
           GH_TOKEN: ${{ github.token }}

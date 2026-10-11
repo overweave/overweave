@@ -1,6 +1,6 @@
 # overweave
 
-> **Experimental — 0.x.** The API will change before 1.0. Not on npm: releases are on GitHub (see [Releases](#releases)).
+> **Experimental — 0.x.** The API will change before 1.0. Not on npmjs.com: the packages are in GitHub's registry (see [Releases](#releases)).
 
 Concepts laid over one another. An app declares kinds of definitions; its contributors — its own code, plugins, the user, a file, a server — add definitions and patch each other's fields, each at its priority and with its rights; what they say is layered, with an owner for every field. The core is only that: what the definitions mean, who contributes and when, how anything is drawn or kept is the app's.
 
@@ -40,11 +40,18 @@ The results land in `bench-results/` (not kept in git), each run read against th
 
 ## Releases
 
-Each release on GitHub carries every package as a tarball (`npm pack`), installable from its URL:
+The packages are published to GitHub's npm registry. It asks for a token even to read: a GitHub token with `read:packages`, in the project's `.npmrc` (or, in GitHub Actions, the workflow's own token, given the package's access):
+
+```ini
+@overweave:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
 
 ```bash
-npm install https://github.com/overweave/overweave/releases/download/v0.1.0/overweave-core-0.1.0.tgz
+npm install @overweave/core@0.1.0
 ```
+
+Each release on GitHub also carries every package as a tarball (`npm pack`).
 
 A release is made by a tag: every package at that version (`npm run check:version 0.1.0` says whether they are), then
 
@@ -56,7 +63,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The `release` workflow checks it as any push is checked, packs each package and attaches them to the release (a 0.x version, or one with a `-`, as a pre-release). Every push to `main` and every pull request is checked by the `check` workflow — what `make check` checks.
+The `release` workflow checks it as any push is checked, publishes each package to the registry (one with a `-` under the `next` tag), then packs each and attaches them to the release (a 0.x version, or one with a `-`, as a pre-release). Every push to `main` and every pull request is checked by the `check` workflow — what `make check` checks.
 
 ## License
 

@@ -1,4 +1,4 @@
-import { type AnyKind, type Contributor, defineKind, type KindsByName, type Problem, type SpecOf } from '@overweave/core';
+import { type AnyKind, type Contributor, defineKind, type Kind, type KindsByName, type Problem, type SpecOf } from '@overweave/core';
 
 /*
  * The UI's kinds, as kinds of the core: a Slot (a place), a Fill (something
@@ -93,13 +93,34 @@ export const validateWrap = fields({ wraps: [name, 'notAName'], ...placement, wh
  * targets, the arrangement) and behaviour (renders, conditions).
  * uiKinds<Render, Target>()({ configure: 'configure', behaviour: 'behaviour' }) —
  * two calls: the types given, the rights' names inferred.
+ *
+ * Strict ({ strict: true }): a render is behaviour all through — adding a
+ * fill or a wrap needs behaviour, and so does a fill's target (a render is
+ * written for its targets' props: one who only arranges does not move it to
+ * others). Not strict, anyone adds them, and a target is configuration.
  */
 export function uiKinds<Render = unknown, Target = unknown>() {
-  return <const C extends string, const B extends string>(rights: { configure: C; behaviour: B }) => kinds<Render, Target, C, B>(rights);
+  return <const C extends string, const B extends string, const S extends boolean = false>(rights: { configure: C; behaviour: B }, options?: { strict?: S }) =>
+    kinds<Render, Target, C, B, S>(rights, options?.strict === true);
 }
 
-function kinds<Render, Target, C extends string, B extends string>(rights: { configure: C; behaviour: B }) {
+/** What strict asks of a fill and a wrap: behaviour to add one, a fill's target behaviour too. */
+type Adding<B extends string, S extends boolean> = S extends true ? { readonly createRight: B } : Record<never, never>;
+
+type FillContract<C extends string, B extends string, S extends boolean> = Adding<B, S> & {
+  readonly required: readonly ['slot', 'render'];
+  readonly patchRights: { readonly title: C; readonly order: C; readonly after: C; readonly target: S extends true ? B : C; readonly when: B; readonly render: B };
+  readonly validate: never;
+};
+type WrapContract<C extends string, B extends string, S extends boolean> = Adding<B, S> & {
+  readonly required: readonly ['wraps', 'render'];
+  readonly patchRights: { readonly order: C; readonly after: C; readonly when: B; readonly render: B };
+  readonly validate: never;
+};
+
+function kinds<Render, Target, C extends string, B extends string, S extends boolean = false>(rights: { configure: C; behaviour: B }, strict = false) {
   const { configure, behaviour } = rights;
+  const adding = strict ? { createRight: behaviour } : {};
   // biome-ignore lint/suspicious/noExplicitAny: a fill is drawn with whatever props its slot gives (fill() types them by the slot).
   type Props = any;
   const Slot = defineKind<SlotSpec>()('Slot', {
@@ -107,21 +128,26 @@ function kinds<Render, Target, C extends string, B extends string>(rights: { con
     merge: { maps: ['hidden'] },
     validate: validateSlot as never,
   });
+  // Their contracts as strict says: typed by it (what a contributor may add and patch), whatever it is.
   const Fill = defineKind<FillSpec<Props, Render, Target>>()('Fill', {
+    ...adding,
     required: ['slot', 'render'],
-    patchRights: { title: configure, order: configure, after: configure, target: configure, when: behaviour, render: behaviour },
+    patchRights: { title: configure, order: configure, after: configure, target: strict ? behaviour : configure, when: behaviour, render: behaviour },
     validate: validateFill as never,
-  });
+  }) as unknown as Kind<'Fill', FillSpec<Props, Render, Target>, FillContract<C, B, S>>;
   const Wrap = defineKind<WrapSpec<Props, Render>>()('Wrap', {
+    ...adding,
     required: ['wraps', 'render'],
     patchRights: { order: configure, after: configure, when: behaviour, render: behaviour },
     validate: validateWrap as never,
-  });
+  }) as unknown as Kind<'Wrap', WrapSpec<Props, Render>, WrapContract<C, B, S>>;
   return { Slot, Fill, Wrap } as const;
 }
 
 /** The UI's kinds, as uiKinds gives them — with the rights' names it was given (typeof ui keeps them too). */
-export type UiKinds<Render = unknown, Target = unknown, C extends string = 'configure', B extends string = 'behaviour'> = ReturnType<typeof kinds<Render, Target, C, B>>;
+export type UiKinds<Render = unknown, Target = unknown, C extends string = 'configure', B extends string = 'behaviour', S extends boolean = false> = ReturnType<
+  typeof kinds<Render, Target, C, B, S>
+>;
 
 /**
  * A contributor of a registry with the UI's kinds (as `ui` gives them) and

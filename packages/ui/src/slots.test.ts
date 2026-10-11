@@ -143,6 +143,23 @@ describe('the kinds', () => {
     // @ts-expect-error a wrap's fill is its definer's
     expect(addon.patch('Wrap', 'w', { wraps: 'g' }).status).toBe('rejected');
   });
+
+  it('strict: a render is behaviour all through — adding a fill or a wrap, a fill’s target', () => {
+    const strict = uiKinds<Render, { kind: string }>()({ configure: 'arrange', behaviour: 'draw' }, { strict: true });
+    const registry = createRegistry({ kinds: [strict.Slot, strict.Fill, strict.Wrap] });
+    const app = registry.contributor('app', { priority: 0, rights: ['arrange', 'draw'] });
+    const user = registry.contributor('user', { priority: 1000, rights: ['arrange'] });
+    expect(app.add('Fill', 'f', { slot: 's', target: { kind: 'Pod' }, render: r('x') }).status).toBe('included');
+    expect(user.patch('Fill', 'f', { title: 'T', order: 1 }).status).toBe('included');
+    // @ts-expect-error a fill's target is behaviour: a Pod's render is not moved to others
+    expect(user.patch('Fill', 'f', { target: { kind: 'Node' } })).toEqual({ status: 'rejected', errors: [{ code: 'noRight', right: 'draw', field: 'target' }] });
+    // @ts-expect-error adding a fill is behaviour
+    expect(user.add('Fill', 'mine', { slot: 's', render: r('m') })).toEqual({ status: 'rejected', errors: [{ code: 'noRight', right: 'draw' }] });
+    // @ts-expect-error adding a wrap is behaviour
+    expect(user.add('Wrap', 'mine', { wraps: 'f', render: r('m') }).status).toBe('rejected');
+    // Not strict (setup's kinds): anyone adds them.
+    expect(setup().user.add('Fill', 'mine', { slot: 's', render: r('m') }).status).toBe('included');
+  });
 });
 
 describe('wraps', () => {
