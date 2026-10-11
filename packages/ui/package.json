@@ -1,6 +1,6 @@
 {
   "name": "@overweave/ui",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "UI concepts over @overweave/core — slots, fills, wraps, order, the user's arrangement — with no framework; @overweave/ui/preact draws them with Preact",
   "license": "MIT",
   "repository": {
@@ -44,7 +44,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@overweave/core": "^0.3.0",
+    "@overweave/core": "^0.3.1",
     "@preact/signals": "^2.11.2",
     "preact": "^10.29.8"
   },
@@ -57,8 +57,8 @@
     }
   },
   "devDependencies": {
-    "@overweave/core": "0.3.0",
-    "@overweave/testkit": "0.3.0",
+    "@overweave/core": "0.3.1",
+    "@overweave/testkit": "0.3.1",
     "@preact/signals": "2.11.2",
     "@testing-library/preact": "3.2.4",
     "happy-dom": "20.14.5",

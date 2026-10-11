@@ -1,6 +1,6 @@
 {
   "name": "@overweave/storybook",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Storybook for what is built on overweave: its config (Preact, one Preact, the workspace's sources), a world drawn in a story (kinds, addons run by the testkit's contract, a slot, what failed), and the Overweave panel (who says what, addons off and on, renders)",
   "license": "MIT",
   "repository": {
@@ -46,9 +46,9 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@overweave/core": "^0.3.0",
-    "@overweave/testkit": "^0.3.0",
-    "@overweave/ui": "^0.3.0",
+    "@overweave/core": "^0.3.1",
+    "@overweave/testkit": "^0.3.1",
+    "@overweave/ui": "^0.3.1",
     "@preact/preset-vite": "^2.10.6",
     "@preact/signals": "^2.11.2",
     "@storybook/preact-vite": "^10.6.0",
@@ -75,9 +75,9 @@
     }
   },
   "devDependencies": {
-    "@overweave/core": "0.3.0",
-    "@overweave/testkit": "0.3.0",
-    "@overweave/ui": "0.3.0",
+    "@overweave/core": "0.3.1",
+    "@overweave/testkit": "0.3.1",
+    "@overweave/ui": "0.3.1",
     "@preact/preset-vite": "2.10.6",
     "@preact/signals": "2.11.2",
     "@testing-library/preact": "3.2.4",

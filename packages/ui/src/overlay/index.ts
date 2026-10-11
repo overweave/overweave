@@ -1,11 +1,11 @@
-import { useSignal } from '@preact/signals';
 import { Fragment, h, render } from 'preact';
-import { useEffect } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { SlotTrace, TracedSlot } from '../preact/trace.ts';
 
 /**
  * The slots over the page, apart from it (its own shadow root, out of the
- * page's flow, never in the pointer's way): each one outlined, its name and
+ * page's flow, never in the pointer's way), over its dialogs too (the top
+ * layer): each one outlined, its name and
  * how many fills it shows — one whose fills drew no element (text) a line
  * where it is; an empty one red: what it draws of its own hatched, or a
  * line where it is. Opened and closed by a hotkey (ctrl+shift+s) or the
@@ -32,16 +32,20 @@ export interface SlotOverlay {
 const CSS = `
 :host { all: initial; }
 .box, .line, .count { position: fixed; pointer-events: none; box-sizing: border-box; }
-.box { border: 1px dashed #2dd4bf; border-radius: 3px; }
-.box[data-empty] { border-color: #ff5c5c; background: repeating-linear-gradient(45deg, transparent 0 6px, rgba(255, 92, 92, .1) 6px 12px); }
-.line { height: 0; border-top: 1px dashed #2dd4bf; display: flex; justify-content: center; align-items: center; }
-.line[data-empty] { border-color: #ff5c5c; }
+.box { border: 1px dashed rgba(45, 212, 191, .35); border-radius: 3px; }
+.box[data-empty] { border-color: rgba(255, 92, 92, .5); background: repeating-linear-gradient(45deg, transparent 0 6px, rgba(255, 92, 92, .1) 6px 12px); }
+.line { height: 0; border-top: 1px dashed rgba(45, 212, 191, .35); display: flex; justify-content: center; align-items: center; }
+.line[data-empty] { border-color: rgba(255, 92, 92, .5); }
 .name { position: absolute; left: -1px; top: -15px; padding: 0 5px; border-radius: 3px; background: #2dd4bf; color: #04201c; font: 600 10px/15px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
 .line > .name { position: static; }
+.box[data-low] > .name { top: 0; border-radius: 0 0 3px 0; }
 [data-empty] > .name { background: #ff5c5c; color: #2a0607; }
 .count { right: 12px; bottom: 12px; padding: 4px 10px; border-radius: 999px; background: #18181b; color: #e4e4e7; font: 12px system-ui, sans-serif; box-shadow: 0 4px 14px rgba(0, 0, 0, .4); }
 .count b { color: #ff7373; font-weight: 600; }
 `;
+
+/** A name's height (the CSS's): one at the window's top is kept inside it. */
+const NAME_HEIGHT = 15;
 
 /** Elements as one box (none: nothing to see). */
 function boxOf(els: Element[]): DOMRect | undefined {
@@ -60,22 +64,22 @@ function lineOf(slot: TracedSlot) {
   const after = place.before ? place.before.getBoundingClientRect().top : within.bottom;
   const prev = place.before ? place.before.previousElementSibling : place.parent.lastElementChild;
   const before = prev ? prev.getBoundingClientRect().bottom : within.top;
-  return { left: `${within.left}px`, top: `${before <= after ? (before + after) / 2 : after}px`, width: `${within.width}px` };
+  const y = before <= after ? (before + after) / 2 : after;
+  return { left: `${within.left}px`, top: `${Math.max(NAME_HEIGHT / 2, y)}px`, width: `${within.width}px` };
 }
 
 const px = (r: DOMRect) => ({ left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
 
 function Overlay({ trace }: { trace: SlotTrace }) {
   // Drawn again each frame: the page moves under it.
-  const frame = useSignal(0);
+  const [, setFrame] = useState(0);
   useEffect(() => {
     let id = requestAnimationFrame(function next() {
-      frame.value++;
+      setFrame((n) => n + 1);
       id = requestAnimationFrame(next);
     });
     return () => cancelAnimationFrame(id);
   }, []);
-  frame.value;
   const slots = trace.slots();
   return h(
     Fragment,
@@ -84,7 +88,8 @@ function Overlay({ trace }: { trace: SlotTrace }) {
       const empty = slot.shown ? undefined : '';
       const name = h('span', { class: 'name' }, empty === undefined ? `${slot.name} · ${slot.shown}` : `∅ ${slot.name}`);
       const box = boxOf(slot.elements());
-      if (box) return h('div', { key: i, class: 'box', 'data-empty': empty, style: px(box) }, name);
+      // Its name over it — inside it where there is no room above (at the window's top).
+      if (box) return h('div', { key: i, class: 'box', 'data-empty': empty, 'data-low': box.top < NAME_HEIGHT ? '' : undefined, style: px(box) }, name);
       const line = lineOf(slot);
       return line ? h('div', { key: i, class: 'line', 'data-empty': empty, style: line }, name) : null;
     }),
@@ -104,8 +109,24 @@ export function mountSlotOverlay({ trace, hotkey = 'ctrl+shift+s', open = false,
   const host = document.createElement('div');
   host.setAttribute('data-overweave-overlay', '');
   // Out of the page's flow, under nothing of it and in the pointer's way nowhere.
-  host.style.cssText = 'position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 2147483646; pointer-events: none;';
+  // In the top layer (a manual popover): over a modal dialog and a popover too — on top again whenever one opens after it.
+  host.setAttribute('popover', 'manual');
+  host.style.cssText = 'position: fixed; inset: 0 auto auto 0; width: 0; height: 0; margin: 0; padding: 0; border: 0; background: none; overflow: visible; pointer-events: none;';
   parent.append(host);
+  const top = host as HTMLElement & { showPopover?: () => void; hidePopover?: () => void };
+  const lift = () => {
+    try {
+      if (host.matches(':popover-open')) top.hidePopover?.();
+      if (opened) top.showPopover?.();
+    } catch {
+      // A browser without popovers: over the page as a fixed element is.
+    }
+  };
+  // Another opened over it (a dialog, a popover: toggle; a dialog opened without it: its open attribute).
+  const other = (e: Event) => e.target !== host && (e as Event & { newState?: string }).newState === 'open' && opened && queueMicrotask(lift);
+  document.addEventListener('toggle', other, true);
+  const dialogs = new MutationObserver((changes) => opened && changes.some((c) => (c.target as Element).hasAttribute('open')) && lift());
+  dialogs.observe(document.documentElement, { subtree: true, attributeFilter: ['open'] });
   const root = host.attachShadow({ mode: 'open' });
   const style = document.createElement('style');
   style.textContent = CSS;
@@ -124,6 +145,7 @@ export function mountSlotOverlay({ trace, hotkey = 'ctrl+shift+s', open = false,
       if (stopped) return;
       opened = on;
       render(opened ? h(Overlay, { trace }) : null, mount);
+      lift();
     },
     get opened() {
       return opened;
@@ -133,6 +155,8 @@ export function mountSlotOverlay({ trace, hotkey = 'ctrl+shift+s', open = false,
       stopped = true;
       opened = false;
       window.removeEventListener('keydown', keys);
+      document.removeEventListener('toggle', other, true);
+      dialogs.disconnect();
       render(null, mount);
       host.remove();
     },

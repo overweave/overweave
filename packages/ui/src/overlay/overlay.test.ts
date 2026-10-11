@@ -7,7 +7,7 @@ import { uiKinds } from '../index.ts';
 import { OverweaveProvider, type PreactComponent, Slot, slotTrace } from '../preact/index.ts';
 import { mountSlotOverlay, type SlotOverlay } from './index.ts';
 
-/* The slots over the page, as an app mounts it: apart from it and out of its way, opened by its hotkey; each slot outlined and named, an empty one red at its place, one of text only a line; how many said. */
+/* The slots over the page, as an app mounts it: apart from it and out of its way (a manual popover: the top layer, over a dialog), opened by its hotkey; each slot outlined and named, an empty one red at its place, one of text only a line; how many said. */
 
 const ui = uiKinds<PreactComponent>()({ configure: 'configure', behaviour: 'behaviour' });
 let overlay: SlotOverlay | undefined;
@@ -39,7 +39,7 @@ function setup() {
 describe('mountSlotOverlay', () => {
   it('is out of the page’s flow and the pointer’s way, drawing nothing till opened — by its hotkey too', () => {
     const { host, root } = setup();
-    expect([host.style.position, host.style.pointerEvents]).toEqual(['fixed', 'none']);
+    expect([host.style.position, host.style.pointerEvents, host.getAttribute('popover')]).toEqual(['fixed', 'none', 'manual']);
     expect(root.querySelector('.count')).toBeNull();
     act(() => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'S', ctrlKey: true, shiftKey: true })));
     expect(root.querySelector('.count')?.textContent).toBe('3 slots · 1 empty');
