@@ -24,3 +24,4 @@ export {
   useSlotView,
 } from './components.ts';
 export { definitionSignal, definitionVersionOf, listSignal, selection, versionOf } from './signals.ts';
+export { type SlotTrace, slotTrace, type TracedSlot } from './trace.ts';

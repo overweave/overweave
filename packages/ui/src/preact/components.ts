@@ -5,6 +5,7 @@ import { useContext, useMemo, useRef } from 'preact/hooks';
 import { type FillSpec, type SlotRef, type SlotSpec, validateFill, validateSlot, validateWrap, type WrapSpec } from '../kinds.ts';
 import { type Failure, type Matcher, report, type SlotOptions, slotContributions, slotView, wrapsOf } from '../slots.ts';
 import { definitionSignal, definitionVersionOf, listSignal, selection, versionOf } from './signals.ts';
+import { type SlotTrace, trackSlot } from './trace.ts';
 
 /*
  * Drawing slots with Preact, each drawn again only when what it shows
@@ -26,6 +27,8 @@ type AnyRegistry = Registry<any>;
 export interface OverweaveContext {
   readonly registry: AnyRegistry;
   readonly options: SlotOptions;
+  /** Where the slots below are followed (for an overlay that shows them); none: they are not. */
+  readonly trace?: SlotTrace;
 }
 
 const Context = createContext<OverweaveContext | null>(null);
@@ -40,13 +43,15 @@ export interface OverweaveProviderProps {
   matcher?: Matcher<any, any>;
   /** Where failures go (a new function each render changes nothing). */
   onError?: (failure: Failure) => void;
+  /** The slots below followed, for an overlay that shows them (slotTrace()); none: nothing kept. */
+  trace?: SlotTrace;
   children?: ComponentChildren;
 }
 
 const UI_KINDS = { Slot: validateSlot, Fill: validateFill, Wrap: validateWrap } as const;
 
 /** The registry the slots below draw from, the app's matcher, where failures go. */
-export function OverweaveProvider({ registry, matcher, onError, children }: OverweaveProviderProps) {
+export function OverweaveProvider({ registry, matcher, onError, trace, children }: OverweaveProviderProps) {
   // The UI's kinds, as uiKinds gives them (not other kinds of the same names): checked once per registry. A disposed one (it accepts no kind) draws nothing, and throws nothing.
   useMemo(() => {
     if (!registry.accepts({ name: '\u0000overweave.probe', contract: {} })) return;
@@ -56,7 +61,10 @@ export function OverweaveProvider({ registry, matcher, onError, children }: Over
   }, [registry]);
   const told = useRef(onError);
   told.current = onError;
-  const value = useMemo<OverweaveContext>(() => ({ registry, options: { matcher: matcher as Matcher, onError: (failure) => told.current?.(failure) } }), [registry, matcher]);
+  const value = useMemo<OverweaveContext>(
+    () => ({ registry, options: { matcher: matcher as Matcher, onError: (failure) => told.current?.(failure) }, trace }),
+    [registry, matcher, trace],
+  );
   return h(Context.Provider, { value }, children);
 }
 
@@ -245,6 +253,34 @@ type AnySlotProps = SlotProps & { props?: unknown };
 /** A place others put things in: its fills, in order, as the user arranged it; its children when it selects nothing. No element of its own. Drawn again only when one of its props is another, or what it selects changed. */
 export class Slot<P = unknown> extends Component<SlotProps<P>> {
   static displayName = 'Overweave.Slot';
+  static contextType = Context;
+  declare context: OverweaveContext | null;
+  /** How many fills it shows now (for a trace). */
+  shown = 0;
+  /** The trace it is followed in: its provider's now (given later, another, none: followed in that one, or let go of). */
+  private traced?: { trace: SlotTrace; stop(): void };
+  private follow() {
+    const trace = this.context?.trace;
+    if (this.traced?.trace === trace) return;
+    this.traced?.stop();
+    this.traced = trace && { trace, ...trackSlot(trace, this as Parameters<typeof trackSlot>[1], () => slotName(this.props.name)) };
+  }
+  private drawn = (n: number) => {
+    this.shown = n;
+  };
+
+  componentDidMount() {
+    this.follow();
+  }
+
+  componentDidUpdate() {
+    this.follow();
+  }
+
+  componentWillUnmount() {
+    this.traced?.stop();
+    this.traced = undefined;
+  }
 
   shouldComponentUpdate(next: SlotProps<P>) {
     const now = this.props as AnySlotProps;
@@ -253,11 +289,11 @@ export class Slot<P = unknown> extends Component<SlotProps<P>> {
   }
 
   render() {
-    return h(SlotView, this.props as AnySlotProps);
+    return h(SlotView, { ...(this.props as AnySlotProps), drawn: this.drawn });
   }
 }
 
-function SlotView({ name, props, retryKey, children, limit }: AnySlotProps) {
+function SlotView({ name, props, retryKey, children, limit, drawn: told }: AnySlotProps & { drawn?: (n: number) => void }) {
   const context = useOverweave();
   const { registry } = context;
   const where = slotName(name);
@@ -273,8 +309,9 @@ function SlotView({ name, props, retryKey, children, limit }: AnySlotProps) {
       }),
     [registry, options, where, props],
   ).value;
-  if (!selected.length) return h(Fragment, null, children);
   const drawn = limit === undefined ? selected : selected.slice(0, Math.max(0, limit));
+  told?.(drawn.length);
+  if (!selected.length) return h(Fragment, null, children);
   return h(
     Retry.Provider,
     { value: retryKey },

@@ -9,7 +9,7 @@ Concepts laid over one another. An app declares kinds of definitions; its contri
 | Folder | Package | What |
 |---|---|---|
 | `packages/core` | `@overweave/core` | Kinds, contributors with priorities and rights, `add` and `patch` (and `unset`), layering with provenance, contracts that always hold. No UI, no domain, no storage, no lifecycle, no dependencies |
-| `packages/ui` | `@overweave/ui`, `@overweave/ui/preact` | The UI's concepts with no framework (slots, fills, wraps, order, the user's arrangement); drawing them with Preact (signals over `subscribe`, `<Slot>`, error boundaries) |
+| `packages/ui` | `@overweave/ui`, `@overweave/ui/preact`, `@overweave/ui/overlay` | The UI's concepts with no framework (slots, fills, wraps, order, the user's arrangement); drawing them with Preact (signals over `subscribe`, `<Slot>`, error boundaries); the slots over the page, for whoever writes fills |
 | `packages/testkit` | `@overweave/testkit`, `@overweave/testkit/preact` | Testing what is built on them: a world of kinds and contributors, an addon run and stopped, what each said; a slot drawn on its own, its renders counted |
 | `packages/storybook` | `@overweave/storybook`, `/preact`, `/manager` | Storybook for what is built on them: its config (Preact, one Preact, the workspace's sources); a world drawn in a story, what failed listed below it; the Overweave panel (who says what, addons off and on, renders) |
 

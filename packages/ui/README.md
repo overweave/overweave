@@ -5,7 +5,8 @@ UI concepts over `@overweave/core`, with no framework — and `@overweave/ui/pre
 | Entry | What | Needs |
 |---|---|---|
 | `@overweave/ui` | Kinds of the UI (`Slot`, `Fill`, `Wrap`) checking their own fields; typed slot references (`slot`); order (`order`, `after`, loops); what a slot shows for some props — targets by the app's matcher, `when`, the user's arrangement; every fill of a slot; what wraps a fill; `UiContributor` | `@overweave/core` |
-| `@overweave/ui/preact` | `<OverweaveProvider>`, `<Slot>` (fills in order, each inside its wraps, each kept apart), `<Guarded>`, `fill` (typed by a slot, narrowed by a guard), hooks and signals following the registry | `preact` and `@preact/signals` (peers, optional for the main entry only) |
+| `@overweave/ui/preact` | `<OverweaveProvider>`, `<Slot>` (fills in order, each inside its wraps, each kept apart), `<Guarded>`, `fill` (typed by a slot, narrowed by a guard), hooks and signals following the registry; `slotTrace` (the slots drawn, for an overlay) | `preact` and `@preact/signals` (peers, optional for the main entry only) |
+| `@overweave/ui/overlay` | `mountSlotOverlay`: the slots over the page — where each is, its name, the empty ones | as `@overweave/ui/preact` |
 
 The packages are plain ESM: they import in Node as they do in a bundler (`make check` builds them and imports them in Node).
 
@@ -268,6 +269,21 @@ Measured (`make bench`, `packages/ui/bench/table.bench.ts`: 10 000 pods, 60 colu
 | The user hides a column; an addon adds one | the header, the rows in view | one change |
 
 So the stream and the scroll never touch the engine; it works when what the UI is changes — a user's action, an addon coming. Two things are the app's to do well: a column's `value(row)` runs for each row in view at each of its changes (keep it pure and cheap); and a sort by a field that changes sorts everything again at each change (≈ 2.6 ms for 10 000) — keep the order apart and move only the row that changed when that matters. A size dragged (a column's width) lives in the component while it is dragged, and goes to the registry once, when it is let go: a change a frame is the registry's work every frame.
+
+## The slots over the page
+
+Where each slot is, its name and how many fills it shows, the empty ones in red: for whoever writes fills and wonders where they went. Give the provider a trace (without one, slots keep nothing) and mount the overlay; `ctrl+shift+s` opens and closes it.
+
+```tsx
+import { mountSlotOverlay } from '@overweave/ui/overlay';
+import { OverweaveProvider, slotTrace } from '@overweave/ui/preact';
+
+const trace = slotTrace();
+mountSlotOverlay({ trace });
+render(<OverweaveProvider registry={registry} trace={trace}>…</OverweaveProvider>, root);
+```
+
+The page is left as it is: a slot's elements are found in Preact's tree when the overlay asks for them. What a fill puts elsewhere (a portal) is not its slot's.
 
 ## Without a framework
 
