@@ -136,6 +136,40 @@ describe('add', () => {
   });
 });
 
+describe('a fallback add', () => {
+  it('stands while nobody adds the definition; another’s add takes its place, the patches over it; gone, the fallback is back', () => {
+    const { registry, core, addon, user } = setup();
+    const other = registry.contributor('other', { priority: 200 });
+    expect(core.add('Board', 'b', { title: 'default' }, { fallback: true })).toEqual({ status: 'included', conflicts: [] });
+    user.patch('Board', 'b', { subtitle: 'mine' });
+    expect(registry.get('Board', 'b')?.spec).toEqual({ title: 'default', subtitle: 'mine' });
+    expect(other.add('Board', 'b', { title: 'its own' }).status).toBe('included');
+    expect([registry.get('Board', 'b')?.spec, registry.get('Board', 'b')?.definedBy]).toEqual([{ title: 'its own', subtitle: 'mine' }, 'other']);
+    expect(registry.contributions('core')).toEqual([{ kind: 'Board', name: 'b', operation: 'add', status: 'waiting' }]);
+    expect(registry.inspect('Board', 'b').contributions.map((c) => [c.contributor, c.status])).toEqual([
+      ['other', 'included'],
+      ['core', 'waiting'],
+      ['user', 'included'],
+    ]);
+    other.remove('Board', 'b');
+    expect([registry.get('Board', 'b')?.spec, registry.get('Board', 'b')?.definedBy]).toEqual([{ title: 'default', subtitle: 'mine' }, 'core']);
+    expect(addon.add('Board', 'b', { title: 'x' }, { fallback: true })).toEqual({ status: 'rejected', errors: [{ code: 'taken', definer: 'core' }] });
+  });
+
+  it('added under another’s add: kept, waiting, nothing read differently; taken back, nothing changes', () => {
+    const { registry, events, core } = setup();
+    const other = registry.contributor('other', { priority: 200 });
+    other.add('Board', 'b', { title: 'its own' });
+    events.length = 0;
+    expect(core.add('Board', 'b', { title: 'default' }, { fallback: true })).toEqual({ status: 'waiting' });
+    core.remove('Board', 'b');
+    expect([events, registry.get('Board', 'b')?.spec.title]).toEqual([[], 'its own']);
+    core.add('Board', 'c', { title: 'only' }, { fallback: true });
+    core.dispose();
+    expect(registry.get('Board', 'c')).toBeUndefined();
+  });
+});
+
 describe('patch', () => {
   it('says the fields its contributor has the rights for, over the definer; the rest rejected', () => {
     const { registry, core, addon } = setup();

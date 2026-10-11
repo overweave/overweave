@@ -30,6 +30,7 @@ export {
   unsetItem,
 } from './kinds.ts';
 export {
+  type AddOptions,
   type AnySpec,
   type ApplyError,
   type ApplyResult,

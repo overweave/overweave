@@ -168,15 +168,18 @@ class Boundary extends Component<BoundaryProps, { failed: Failed }> {
 export interface GuardedProps {
   /** Whose drawing it is: what it throws is told as this definition's. */
   definition: Definition;
+  /** Another value tries what failed again (a page's path); none: the slot's around it. */
+  retryKey?: unknown;
   /** Drawn when it throws (default: nothing). */
   fallback?: ComponentChildren;
   children?: ComponentChildren;
 }
 
 /** Any definition's drawing kept apart (a column's cell, a section): told as its own, tried again when it changes or the slot's retry key does. */
-export function Guarded({ definition, fallback = null, children }: GuardedProps) {
+export function Guarded({ definition, retryKey, fallback = null, children }: GuardedProps) {
   const { options } = useOverweave();
-  return h(Boundary, { definition, options, fallback }, children);
+  const boundary = h(Boundary, { definition, options, fallback }, children);
+  return retryKey === undefined ? boundary : h(Retry.Provider, { value: retryKey }, boundary);
 }
 Guarded.displayName = 'Overweave.Guarded';
 
@@ -233,6 +236,8 @@ export type SlotProps<P = unknown> = {
   retryKey?: unknown;
   /** Drawn when it selects nothing (a fill that draws nothing, or fails, is still selected). */
   children?: ComponentChildren;
+  /** At most this many of its fills drawn, the first in its order (1: one in place of the others — a default the last). */
+  limit?: number;
 } & PropsOf<P>;
 
 type AnySlotProps = SlotProps & { props?: unknown };
@@ -244,7 +249,7 @@ export class Slot<P = unknown> extends Component<SlotProps<P>> {
   shouldComponentUpdate(next: SlotProps<P>) {
     const now = this.props as AnySlotProps;
     const then = next as AnySlotProps;
-    return then.name !== now.name || then.props !== now.props || !Object.is(then.retryKey, now.retryKey) || then.children !== now.children;
+    return then.name !== now.name || then.props !== now.props || !Object.is(then.retryKey, now.retryKey) || then.children !== now.children || then.limit !== now.limit;
   }
 
   render() {
@@ -252,7 +257,7 @@ export class Slot<P = unknown> extends Component<SlotProps<P>> {
   }
 }
 
-function SlotView({ name, props, retryKey, children }: AnySlotProps) {
+function SlotView({ name, props, retryKey, children, limit }: AnySlotProps) {
   const context = useOverweave();
   const { registry } = context;
   const where = slotName(name);
@@ -269,16 +274,17 @@ function SlotView({ name, props, retryKey, children }: AnySlotProps) {
     [registry, options, where, props],
   ).value;
   if (!selected.length) return h(Fragment, null, children);
+  const drawn = limit === undefined ? selected : selected.slice(0, Math.max(0, limit));
   return h(
     Retry.Provider,
     { value: retryKey },
-    selected.map((fill) => h(Fill, { key: fill.name, fill: fill as Definition<FillSpec>, props, context })),
+    drawn.map((fill) => h(Fill, { key: fill.name, fill: fill as Definition<FillSpec>, props, context })),
   );
 }
 SlotView.displayName = 'Overweave.SlotView';
 
 /** A typed slot as an element, its props checked (h() does not infer a component's generic props): slotElement(header, { pod }). */
-export function slotElement<P>(name: SlotRef<P>, props: P, rest: { retryKey?: unknown; children?: ComponentChildren } = {}): VNode {
+export function slotElement<P>(name: SlotRef<P>, props: P, rest: { retryKey?: unknown; limit?: number; children?: ComponentChildren } = {}): VNode {
   return h(Slot as ComponentType<AnySlotProps>, { name, props, ...rest }) as VNode;
 }
 

@@ -5,6 +5,10 @@ import { type AnyContract, type AnyKind, type CreatableBy, type DeepReadonly, ty
  * A contributor is the app's: an id, a priority, rights — the core knows
  * nothing else of it (an extension, the user, a file, a server).
  * - add: a definition of one's own, whole. One definer per kind and name.
+ *   A fallback add ({ fallback: true }) stands only while nobody adds the
+ *   definition: a default that yields — another's add takes its place (the
+ *   fallback kept under it, back when that add goes), the patches over
+ *   whichever is there. One fallback per kind and name, too.
  * - patch: fields of a definition, each as the right its kind names for it.
  *   A contributor's patch replaces its patch before; `unset` takes away
  *   what is under it.
@@ -110,14 +114,22 @@ export interface ContributorOptions<R extends string = string> {
 
 type KindName<KM> = keyof KM & string;
 
+export interface AddOptions {
+  /** A default that yields: it stands only while nobody adds the definition. */
+  fallback?: boolean;
+}
+
 /** One who contributes: what it says is its own, taken back when it goes. */
 export interface Contributor<KM = Record<string, AnyKind>, R extends string = string> {
   readonly id: string;
   readonly priority: number;
   readonly tieBreak: number;
   readonly rights: readonly string[];
-  /** A definition of its own, whole; the same name of another's is rejected. Adding it again replaces it. */
-  add<K extends CreatableBy<KM, R>>(kind: K, name: string, spec: SpecOf<KM[K]>): ApplyResult;
+  /**
+   * A definition of its own, whole; the same name of another's is rejected. Adding it again replaces it.
+   * fallback: only while nobody adds it — another's add takes its place (waiting: kept under it).
+   */
+  add<K extends CreatableBy<KM, R>>(kind: K, name: string, spec: SpecOf<KM[K]>, options?: AddOptions): ApplyResult;
   /** Fields of a definition it has the rights for. Replaces its patch of it before; {} takes it back. */
   patch<K extends KindName<KM>>(kind: K, name: string, fields: PatchOf<KM[K], PatchableBy<KM[K], R>>): ApplyResult;
   /** All it said of a definition (its add and its patch), taken back. */
@@ -297,7 +309,10 @@ interface Contribution {
 interface Entry {
   kind: string;
   name: string;
+  /** The add read: the definite one, else the fallback. */
   add: Contribution | undefined;
+  definite: Contribution | undefined;
+  fallback: Contribution | undefined;
   /** By contributor. */
   patches: Map<string, Contribution>;
   /** Conflicts there are now (leaf, the two): each told when it comes. */
@@ -457,7 +472,7 @@ class Store {
       priority: who.priority,
       tieBreak,
       rights,
-      add: (kind: string, name: string, spec: object) => this.batch(() => this.add(who, kind, name, spec)),
+      add: (kind: string, name: string, spec: object, options?: AddOptions) => this.batch(() => this.add(who, kind, name, spec, options?.fallback === true)),
       patch: (kind: string, name: string, fields: object) => this.batch(() => this.patch(who, kind, name, fields)),
       remove: (kind: string, name: string) => this.batch(() => this.remove(who, kind, name)),
       dispose: () => this.batch(() => this.drop(who)),
@@ -481,7 +496,9 @@ class Store {
 
   inspect(kind: string, name: string): Inspection {
     const entry = this.entries.get(kind)?.get(name);
-    const all = entry ? [...(entry.add ? [entry.add] : []), ...entry.patches.values()] : [];
+    // The add read, a fallback under another's add (waiting), the patches.
+    const shadowed = entry?.fallback && entry.fallback !== entry.add ? [entry.fallback] : [];
+    const all = entry ? [...(entry.add ? [entry.add] : []), ...shadowed, ...entry.patches.values()] : [];
     return {
       definition: this.get(kind, name),
       contributions: all.map((c) => ({
@@ -489,7 +506,7 @@ class Store {
         operation: c.operation,
         priority: c.who.priority,
         tieBreak: c.who.tieBreak,
-        status: entry?.add ? ('included' as const) : ('waiting' as const),
+        status: entry?.add && !shadowed.includes(c) ? ('included' as const) : ('waiting' as const),
         leaves: c.leaves.map((l) => Object.freeze({ path: l.path, value: l.value, by: provenance(c) })),
       })),
     };
@@ -500,7 +517,9 @@ class Store {
     if (!who) return Object.freeze([]);
     const out: ContributionOf[] = [];
     for (const entry of who.entries) {
-      if (entry.add?.who === who) out.push(Object.freeze({ kind: entry.kind, name: entry.name, operation: 'add', status: 'included' }));
+      if (entry.definite?.who === who) out.push(Object.freeze({ kind: entry.kind, name: entry.name, operation: 'add', status: 'included' }));
+      if (entry.fallback?.who === who)
+        out.push(Object.freeze({ kind: entry.kind, name: entry.name, operation: 'add', status: entry.add === entry.fallback ? 'included' : 'waiting' }));
       if (entry.patches.get(id)?.who === who) out.push(Object.freeze({ kind: entry.kind, name: entry.name, operation: 'patch', status: entry.add ? 'included' : 'waiting' }));
     }
     return Object.freeze(out);
@@ -549,14 +568,15 @@ class Store {
     if (this.disposed) throw new Error('the registry is disposed');
   }
 
-  private add(who: Who, kind: string, name: string, spec: object): ApplyResult {
+  private add(who: Who, kind: string, name: string, spec: object, fallback = false): ApplyResult {
     if (this.disposed || who.disposed) return rejected([{ code: 'disposed' }]);
     const contract = this.contracts.get(kind);
     if (!contract) return this.reject(who, kind, name, [{ code: 'unknownKind' }]);
     if (!isRecord(spec)) return this.reject(who, kind, name, [{ code: 'notAnObject' }]);
     if (contract.createRight !== undefined && !who.rights.has(contract.createRight)) return this.reject(who, kind, name, [{ code: 'noRight', right: contract.createRight }]);
     const known = this.entries.get(kind)?.get(name);
-    if (known?.add && known.add.who !== who) return this.reject(who, kind, name, [{ code: 'taken', definer: known.add.who.id }]);
+    const holder = fallback ? known?.fallback : known?.definite;
+    if (holder && holder.who !== who) return this.reject(who, kind, name, [{ code: 'taken', definer: holder.who.id }]);
     const leaves = this.leavesOf(contract, spec, 'add');
     if (!Array.isArray(leaves)) return this.reject(who, kind, name, leaves.errors);
     const entry = this.entryOf(kind, name);
@@ -567,12 +587,23 @@ class Store {
       this.forgetIfEmpty(entry);
       return this.reject(who, kind, name, alone);
     }
-    if (entry.add && sameLeaves(entry.add, c)) return this.resultOf(entry, who);
-    entry.add = c;
+    const before = fallback ? entry.fallback : entry.definite;
+    if (before && sameLeaves(before, c)) return fallback && entry.add !== entry.fallback ? WAITING : this.resultOf(entry, who);
+    if (fallback) entry.fallback = c;
+    else entry.definite = c;
     who.entries.add(entry);
+    const read = entry.add;
+    entry.add = entry.definite ?? entry.fallback;
+    // A fallback under another's add: kept, nothing read differently.
+    if (entry.add === read) return WAITING;
     this.retake(entry);
     this.changed(entry);
     return this.resultOf(entry, who);
+  }
+
+  /** Whether a contributor says anything of a definition still (its add, its fallback, its patch). */
+  private says(entry: Entry, who: Who): boolean {
+    return entry.definite?.who === who || entry.fallback?.who === who || entry.patches.has(who.id);
   }
 
   private patch(who: Who, kind: string, name: string, fields: object): ApplyResult {
@@ -616,7 +647,7 @@ class Store {
     const entry = this.entries.get(kind)?.get(name);
     if (!entry) return;
     if (entry.patches.has(who.id)) this.takeBack(entry, who, 'patch');
-    if (entry.add?.who === who) this.takeBack(entry, who, 'add');
+    if (entry.definite?.who === who || entry.fallback?.who === who) this.takeBack(entry, who, 'add');
   }
 
   /** A contributor gone: closed first (nothing it is asked after counts), then everything it said taken back. */
@@ -628,13 +659,17 @@ class Store {
   }
 
   private takeBack(entry: Entry, who: Who, operation: Operation): void {
-    const had = entry.add !== undefined;
-    if (operation === 'add') entry.add = undefined;
-    else entry.patches.delete(who.id);
-    if (entry.add?.who !== who && !entry.patches.has(who.id)) who.entries.delete(entry);
-    // A patch gone: the others taken again (one may no longer fit). The add gone: they wait.
-    if (operation === 'patch') this.retake(entry);
-    if (had) this.changed(entry);
+    const read = entry.add;
+    if (operation === 'add') {
+      if (entry.definite?.who === who) entry.definite = undefined;
+      if (entry.fallback?.who === who) entry.fallback = undefined;
+      // The add gone: a fallback under it read instead (the patches taken again over it); none, they wait.
+      entry.add = entry.definite ?? entry.fallback;
+    } else entry.patches.delete(who.id);
+    if (!this.says(entry, who)) who.entries.delete(entry);
+    // A patch gone, or the add replaced: the others taken again (one may no longer fit).
+    if (operation === 'patch' || (entry.add && entry.add !== read)) this.retake(entry);
+    if (read !== undefined && (operation === 'patch' || entry.add !== read)) this.changed(entry);
     this.forgetIfEmpty(entry);
   }
 
@@ -654,7 +689,7 @@ class Store {
         continue;
       }
       entry.patches.delete(p.who.id);
-      if (entry.add.who !== p.who) p.who.entries.delete(entry);
+      if (!this.says(entry, p.who)) p.who.entries.delete(entry);
       this.tell({ type: 'dropped', contributor: p.who.id, kind: entry.kind, name: entry.name, errors: broken });
     }
   }
@@ -767,14 +802,14 @@ class Store {
     this.entries.set(kind, byName);
     let entry = byName.get(name);
     if (!entry) {
-      entry = { kind, name, add: undefined, patches: new Map(), conflicts: new Set(), cached: null };
+      entry = { kind, name, add: undefined, definite: undefined, fallback: undefined, patches: new Map(), conflicts: new Set(), cached: null };
       byName.set(name, entry);
     }
     return entry;
   }
 
   private forgetIfEmpty(entry: Entry): void {
-    if (entry.add || entry.patches.size) return;
+    if (entry.add || entry.fallback || entry.patches.size) return;
     const byName = this.entries.get(entry.kind);
     byName?.delete(entry.name);
     if (byName && !byName.size) this.entries.delete(entry.kind);

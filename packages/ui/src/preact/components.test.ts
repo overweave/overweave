@@ -268,6 +268,19 @@ describe('Slot', () => {
   });
 });
 
+describe('a slot of one', () => {
+  it('draws at most limit fills, the first in its order: a default (the last) yields to another’s', () => {
+    const { w, app, addon } = setup();
+    app.add('Fill', 'default', { slot: 'page', order: 1000, render: Counted('default') });
+    const view = mount(w, h(Slot as never, { name: 'page', limit: 1 }));
+    expect(view.text()).toBe('default');
+    view.act(() => addon.add('Fill', 'mine', { slot: 'page', render: Counted('mine') }));
+    expect(view.text()).toBe('mine');
+    view.act(() => addon.remove('Fill', 'mine'));
+    expect(view.text()).toBe('default');
+  });
+});
+
 describe('reading', () => {
   it('asks nothing of who reads a definition when another of its kind changes, nor of a slot when another slot does', () => {
     const { w, app, user } = setup();
@@ -425,6 +438,21 @@ describe('kept apart, and tried again', () => {
     expect(view.failures.map((f) => f.definition.name)).toEqual(['bad']);
     view.act(() => editor.patch('Column', 'bad', { value: (row: string) => row.toUpperCase() }));
     expect(view.text()).toBe('WEBweb');
+  });
+  it('tries a Guarded drawing again on its own retry key (a page’s path), keeping what did not fail', () => {
+    const w = uiWorld(ui);
+    const app = w.as('app');
+    const Page = ({ path }: { path: string }) => {
+      if (path === '/bad') throw new Error('bad page');
+      return h('p', null, path);
+    };
+    app.add('Fill', 'page', { slot: 'main', render: () => null });
+    const definition = w.registry.get('Fill', 'page') as Definition;
+    const Outlet = ({ path }: { path: string }) => h(Guarded, { definition, retryKey: path, fallback: h('i', null, 'failed') }, h(Page, { path }));
+    const view = mount(w, h(Outlet, { path: '/bad' }));
+    expect(view.text()).toBe('failed');
+    view.rerender(h(Outlet, { path: '/good' }));
+    expect(view.text()).toBe('/good');
   });
 });
 
