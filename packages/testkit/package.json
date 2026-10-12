@@ -58,8 +58,8 @@
   "devDependencies": {
     "@overweave/core": "0.4.0",
     "@overweave/ui": "0.4.0",
-    "@preact/signals": "2.11.2",
-    "happy-dom": "20.14.5",
+    "@preact/signals": "2.11.3",
+    "happy-dom": "20.14.6",
     "preact": "10.29.8"
   }
 }
