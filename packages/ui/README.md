@@ -4,8 +4,8 @@ UI concepts over `@overweave/core`, with no framework — and `@overweave/ui/pre
 
 | Entry | What | Needs |
 |---|---|---|
-| `@overweave/ui` | Kinds of the UI (`Slot`, `Fill`, `Wrap`) checking their own fields; typed slot references (`slot`); order (`order`, `after`, loops); what a slot shows for some props — targets by the app's matcher, `when`, the user's arrangement; every fill of a slot; what wraps a fill; `UiContributor` | `@overweave/core` |
-| `@overweave/ui/preact` | `<OverweaveProvider>`, `<Slot>` (fills in order, each inside its wraps, each kept apart), `<Guarded>`, `fill` (typed by a slot, narrowed by a guard), hooks and signals following the registry; `slotTrace` (the slots drawn, for an overlay) | `preact` and `@preact/signals` (peers, optional for the main entry only) |
+| `@overweave/ui` | Kinds of the UI (`Slot`, `Fill`, `Wrap`) checking their own fields; typed slot references (`slot`); order (`order`, `after`, `before`, loops); what a slot shows for some props — targets by the app's matcher, `when`, the user's arrangement; every fill of a slot; what wraps a fill; `UiContributor` | `@overweave/core` |
+| `@overweave/ui/preact` | `<OverweaveProvider>`, `<Slot>` (fills in order, each inside its wraps, each kept apart), `<Guarded>`, `<Wrapped>` (what the app draws itself, wrapped by name like a fill), `fill` (typed by a slot, narrowed by a guard), hooks and signals following the registry; `slotTrace` (the slots drawn, for an overlay) | `preact` and `@preact/signals` (peers, optional for the main entry only) |
 | `@overweave/ui/overlay` | `mountSlotOverlay`: the slots over the page — where each is, its name, the empty ones | as `@overweave/ui/preact` |
 
 The packages are plain ESM: they import in Node as they do in a bundler (`make check` builds them and imports them in Node).
@@ -25,16 +25,18 @@ const registry = createRegistry({ kinds: [ui.Slot, ui.Fill, ui.Wrap /*, the app'
 | Kind | Fields | Rights |
 |---|---|---|
 | `Slot` | `title`, `userArranged`, `arrangement`, `hidden` | configure |
-| `Fill` | `title`, `order`, `after`, `target` · `when`, `render` · `slot` | configure · behaviour · its definer's |
-| `Wrap` | `order`, `after` · `when`, `render` · `wraps` | configure · behaviour · its definer's |
+| `Fill` | `title`, `order`, `after`, `before`, `target` · `when`, `render` · `slot` | configure · behaviour · its definer's |
+| `Wrap` | `order`, `after`, `before`, `target` · `when`, `render` · `wraps` | configure · behaviour · its definer's |
 
 - **Checked**: each kind checks its fields' values (an arrangement is a list of names, an order a finite number, a `when` a function…); what would break a slot is rejected, never read. Every `uiKinds()` gives the same contracts: kinds made twice are the same kinds — of one copy of `@overweave/ui` (two copies in one bundle are two sets of kinds, and the provider takes only its own).
 - **Names are one space per kind**: prefix what an addon names with its id (`images.badge`, `table.page`) — the same name of another's is `taken`.
 - **Where a fill goes** (`slot`) and **what a wrap wraps** (`wraps`) are their definer's: no right patches them.
 - **`hidden`** is a map of names: what several say of it merges name by name — an addon hides `b`, the user hides `a`, both are hidden; `{ b: false }` shows it again.
 - **A slot need not be declared**: one nobody declares shows its fills as they are. What the user arranges — `arrangement` (the fills they put first), `hidden` — is a patch of the slot's definition, and waits until someone declares it. `userArranged: false`: neither is followed.
-- **Order** is decided among all the slot's fills, then those for the props are kept: a fill `after` one that is not shown stays where it was put. A loop of `after`s goes last, together; what follows one of it still follows it.
-- **`when`** is taken as true or false (`Boolean`); a `target` with no matcher is not shown, and told. A `when` that reads a signal makes the slot follow it.
+- **Order** is decided among all the slot's fills, then those for the props are kept: a fill `after` (or `before`) one that is not shown stays where it was put. `after` puts it right after the one it names, `before` right before it — one of them, not both (`bothAnchors`, on the spec as all its contributors make it: to move one from `after` to `before`, a patch says both, `{ before: 'x', after: unset }`). A loop of them goes last, together; what goes by one of it still goes by it.
+- **`when`** is taken as true or false (`Boolean`); a `target` with no matcher is not shown, and told. A `when` that reads a signal makes the slot follow it. A wrap's `target` and `when` are a fill's: it wraps only for the props they take.
+- **Wraps nest by order**: the lowest innermost, the highest outermost. **A wrap replaces** what it wraps when it draws no `children`: wraps outside it (a higher `order`) wrap the replacement, those inside it are gone with what they wrapped — give a replacing wrap a low order (`order: 0`) and decorations (500, the default) stay around it.
+- **`wraps` names a fill** — or something the app draws itself and wraps by name with `<Wrapped>` (a table's cell, by its column's name): the same wraps, in the same order, each kept apart.
 
 `typeof ui` keeps the rights' names; `UiContributor<typeof ui, [typeof Column], 'configure'>` is a contributor of the UI's kinds and some of one's own, typed by the rights it is given — what an addon's setup is handed.
 
@@ -73,6 +75,12 @@ render(
 );
 ```
 
+Something the app draws itself is wrapped by name like a fill — its children inside the Wraps of that name for the props (stable, as a slot's; none: no props):
+
+```tsx
+<Wrapped name={column.name} props={cellProps}>{cell}</Wrapped>
+```
+
 **Drawn the least number of times** — each case is a test of `src/preact/components.test.ts`, counting real renders:
 
 | What changes | What is drawn again |
@@ -88,9 +96,9 @@ render(
 | One definition read by `useDefinition` | its readers only when that definition changes |
 | A new `retryKey` | what failed — nothing else |
 
-The guarantee holds while what the slot is given keeps its identity (its props, its children): **give `<Slot>` stable props** — `useMemo(() => ({ count }), [count])`, not `props={{ count }}` in the render, which draws every fill of the slot again each time the parent draws. Likewise a new `matcher` makes every slot choose, and draw, again; `onError` may be a new function each render. A wrap added to a fill, or taken away from it, **remounts** that fill (and the wraps inside it): its state starts again.
+The guarantee holds while what the slot is given keeps its identity (its props, its children): **give `<Slot>` stable props** — `useMemo(() => ({ count }), [count])`, not `props={{ count }}` in the render, which draws every fill of the slot again each time the parent draws. Likewise a new `matcher` makes every slot choose, and draw, again; `onError` may be a new function each render. A wrap added to a fill, or taken away from it, **remounts** that fill (and the wraps inside it): its state starts again — so with `<Wrapped>` and its children.
 
-**Kept apart**: each fill and each wrap is drawn inside its own error boundary, keyed by its kind and name (`Fill:…`, `Wrap:…`).
+**Kept apart**: each fill and each wrap is drawn inside its own error boundary, keyed by its kind and name (`Fill:…`, `Wrap:…`). `<Wrapped>` keeps its wraps apart, not its children: what the app draws there is the app's to keep (`<Guarded>`).
 
 - A fill that throws in drawing is not drawn; a **wrap is a decoration**: one that throws leaves what it wraps drawn — keep what children need (a context provider) out of wraps.
 - Told to `onError` as `{ phase, definition, error }`: `'match'` (the app's matcher), `'when'` — told once per definition and phase, until the definition changes — and `'render'`. An `onError` that throws is not the slot's to fail for.

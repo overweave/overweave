@@ -3,8 +3,8 @@ import type { FillSpec, RenderOf, SlotRef, SlotSpec, TargetOf, UiKindsMap, WrapS
 import { inOrder } from './order.ts';
 
 /*
- * What a slot shows: its fills, in order (order and after, among all the
- * slot's fills), those whose target takes the props (the app's matcher
+ * What a slot shows: its fills, in order (order, after or before, among
+ * all the slot's fills), those whose target takes the props (the app's matcher
  * decides; no target: every props) and whose condition holds, as the user
  * arranged the slot; and what is drawn around each fill. Nothing drawn:
  * what to draw is the binding's. The fills of each slot, and the wraps of
@@ -43,7 +43,7 @@ export interface SlotView<Fill> {
 }
 
 type FillOf<KM, P> = Definition<FillSpec<P, RenderOf<KM>, TargetOf<KM>>>;
-type WrapOf<KM, P> = Definition<WrapSpec<P, RenderOf<KM>>>;
+type WrapOf<KM, P> = Definition<WrapSpec<P, RenderOf<KM>, TargetOf<KM>>>;
 
 const nameOf = (where: string | SlotRef) => (typeof where === 'string' ? where : where.name);
 
@@ -155,7 +155,7 @@ export function fillsOf<KM extends UiKindsMap, P>(registry: Registry<KM>, where:
   return slotView(registry, where, props, options).selected;
 }
 
-/** What is drawn around a fill for some props: the innermost first. */
-export function wrapsOf<KM extends UiKindsMap, P>(registry: Registry<KM>, fill: string, props: P, options: SlotOptions<TargetOf<KM>, P> = {}): WrapOf<KM, P>[] {
-  return indexed(read(registry).list('Wrap'), (d) => String(d.spec.wraps), fill).filter((w) => isFor(w, props, options as SlotOptions)) as WrapOf<KM, P>[];
+/** What is drawn around a fill (or anything the app wraps by name) for some props: the innermost first. */
+export function wrapsOf<KM extends UiKindsMap, P>(registry: Registry<KM>, name: string, props: P, options: SlotOptions<TargetOf<KM>, P> = {}): WrapOf<KM, P>[] {
+  return indexed(read(registry).list('Wrap'), (d) => String(d.spec.wraps), name).filter((w) => isFor(w, props, options as SlotOptions)) as WrapOf<KM, P>[];
 }

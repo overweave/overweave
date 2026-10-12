@@ -1,6 +1,6 @@
 {
   "name": "@overweave/testkit",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Testing what is built on overweave: a world of kinds and contributors, an addon run and stopped, what each said, the events; with Preact, a slot drawn on its own and its renders counted",
   "license": "MIT",
   "repository": {
@@ -39,8 +39,8 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@overweave/core": "^0.3.1",
-    "@overweave/ui": "^0.3.1",
+    "@overweave/core": "^0.4.0",
+    "@overweave/ui": "^0.4.0",
     "@preact/signals": "^2.11.2",
     "preact": "^10.29.8"
   },
@@ -56,8 +56,8 @@
     }
   },
   "devDependencies": {
-    "@overweave/core": "0.3.1",
-    "@overweave/ui": "0.3.1",
+    "@overweave/core": "0.4.0",
+    "@overweave/ui": "0.4.0",
     "@preact/signals": "2.11.2",
     "happy-dom": "20.14.5",
     "preact": "10.29.8"

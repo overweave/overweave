@@ -211,29 +211,62 @@ class Fill extends Component<FillProps> {
   }
 }
 
-/** A fill drawn inside what wraps it (the innermost first), each kept apart, each keyed by its kind and name. */
-function Drawn({ fill, props, context }: FillProps) {
-  const { registry, options } = context;
-  const wraps = useMemo(
+/** The wraps of a drawing (by its name), for its props: followed as wraps come, change and go. */
+function useWraps({ registry, options }: OverweaveContext, name: string, props: unknown): readonly Definition<WrapSpec>[] {
+  return useMemo(
     () =>
       selection(() => {
         versionOf(registry, 'Wrap').value;
-        return wrapsOf(registry, fill.name, props, options) as Definition<WrapSpec>[];
+        return wrapsOf(registry, name, props, options) as Definition<WrapSpec>[];
       }),
-    [registry, options, fill.name, props],
+    [registry, options, name, props],
   ).value;
-  let drawn: ComponentChildren = h(Boundary, { key: `Fill:${fill.name}`, definition: fill, options, fallback: null }, h(fill.spec.render as PreactComponent, props as object));
+}
+
+/** A drawing inside these wraps (the innermost first), each kept apart: one that throws, what it wraps drawn instead. */
+function wrapIn(wraps: readonly Definition<WrapSpec>[], props: unknown, inner: ComponentChildren, options: OverweaveContext['options']): ComponentChildren {
+  let drawn = inner;
   for (const wrap of wraps) {
-    const inner: ComponentChildren = drawn;
+    const within: ComponentChildren = drawn;
     drawn = h(
       Boundary,
-      { key: `Wrap:${wrap.name}`, definition: wrap, options, fallback: inner },
-      h(wrap.spec.render as PreactComponent, { ...(props as object), children: inner }),
+      { key: `Wrap:${wrap.name}`, definition: wrap, options, fallback: within },
+      h(wrap.spec.render as PreactComponent, { ...(props as object), children: within }),
     );
   }
   return drawn;
 }
+
+/** A fill drawn inside what wraps it (the innermost first), each kept apart, each keyed by its kind and name. */
+function Drawn({ fill, props, context }: FillProps) {
+  const wraps = useWraps(context, fill.name, props);
+  const inner = h(Boundary, { key: `Fill:${fill.name}`, definition: fill, options: context.options, fallback: null }, h(fill.spec.render as PreactComponent, props as object));
+  return wrapIn(wraps, props, inner, context.options) as VNode;
+}
 Drawn.displayName = 'Overweave.Drawn';
+
+/** No props: the same each time. */
+const NO_PROPS = {};
+
+export interface WrappedProps<P = unknown> {
+  /** The name it is wrapped by: what Wraps name in `wraps`. */
+  name: string;
+  /** What its wraps are given (and chosen by: target, when) — stable, as a slot's; none: no props. */
+  props?: P;
+  children?: ComponentChildren;
+}
+
+/**
+ * Something the app draws itself, wrapped by name like a fill (a table's
+ * cell, by its column's name): its children inside the Wraps of that name
+ * for the props, the innermost first, each wrap kept apart — the children
+ * not (the app's to keep: Guarded); remounted as a wrap comes or goes.
+ */
+export function Wrapped<P>({ name, props = NO_PROPS as P, children }: WrappedProps<P>) {
+  const context = useOverweave();
+  return wrapIn(useWraps(context, name, props), props, children, context.options) as VNode;
+}
+Wrapped.displayName = 'Overweave.Wrapped';
 
 /** What a typed slot must be given: its props, unless they may be left out. */
 type PropsOf<P> = unknown extends P ? { props?: P } : undefined extends P ? { props?: P } : { props: P };

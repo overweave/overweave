@@ -10,10 +10,11 @@ import { type AnyKind, type Contributor, defineKind, type Kind, type KindsByName
  * the app's (Target). The kinds check their own fields' values.
  */
 
-/** Where a definition goes among others: by order (500 if none), then name; one with `after` right after the one it names. */
+/** Where a definition goes among others: by order (500 if none), then name; one with `after` right after the one it names, with `before` right before it (one of them, not both). */
 export interface Placement {
   order?: number;
   after?: string;
+  before?: string;
 }
 
 /** A place: what the user arranged in it — the fills they put first, those they hid (or showed) — unless it is not theirs to arrange. */
@@ -37,9 +38,17 @@ export interface FillSpec<P = unknown, Render = unknown, Target = unknown> exten
   render: Render;
 }
 
-/** Drawn around a fill (the fill's name): its render given what it wraps. A decoration: one that fails leaves what it wraps drawn. */
-export interface WrapSpec<P = unknown, Render = unknown> extends Placement {
+/**
+ * Drawn around a fill (the fill's name; or another drawing the app wraps by
+ * name, <Wrapped>): its render given what it wraps — for some targets (none:
+ * every one), when it holds. Wraps nest by order, the lowest innermost. A
+ * decoration: one that fails leaves what it wraps drawn. One that draws no
+ * children replaces what it wraps; outside it (a higher order), others still
+ * wrap the replacement — a replacing wrap goes low (order 0).
+ */
+export interface WrapSpec<P = unknown, Render = unknown, Target = unknown> extends Placement {
   wraps: string;
+  target?: Target;
   when?: (props: P) => boolean;
   render: Render;
 }
@@ -81,12 +90,21 @@ function fields(checks: Record<string, [Check, string]>) {
   };
 }
 
-const placement = { order: [finite, 'notANumber'], after: [name, 'notAName'] } as Record<string, [Check, string]>;
+const placement = { order: [finite, 'notANumber'], after: [name, 'notAName'], before: [name, 'notAName'] } as Record<string, [Check, string]>;
+
+/** A placement's fields checked, and one anchor at most (after or before). */
+function placed(checks: Record<string, [Check, string]>) {
+  const check = fields({ ...checks, ...placement });
+  return (spec: Record<string, unknown>): Problem[] | undefined => {
+    const problems = [...(check(spec) ?? []), ...(spec.after !== undefined && spec.before !== undefined ? [{ code: 'bothAnchors', field: 'before' }] : [])];
+    return problems.length ? problems : undefined;
+  };
+}
 
 // The kinds' validations: one each, whatever the rights' names — so every uiKinds() gives the same contracts.
 export const validateSlot = fields({ title: [text, 'notText'], userArranged: [flag, 'notAFlag'], arrangement: [texts, 'notNames'], hidden: [flags, 'notFlags'] });
-export const validateFill = fields({ slot: [name, 'notAName'], title: [text, 'notText'], ...placement, when: [fn, 'notAFunction'] });
-export const validateWrap = fields({ wraps: [name, 'notAName'], ...placement, when: [fn, 'notAFunction'] });
+export const validateFill = placed({ slot: [name, 'notAName'], title: [text, 'notText'], when: [fn, 'notAFunction'] });
+export const validateWrap = placed({ wraps: [name, 'notAName'], when: [fn, 'notAFunction'] });
 
 /**
  * The UI's kinds, their rights named by the app: configure (titles, order,
@@ -97,24 +115,33 @@ export const validateWrap = fields({ wraps: [name, 'notAName'], ...placement, wh
  * Strict ({ strict: true }): a render is behaviour all through — adding a
  * fill or a wrap needs behaviour, and so does a fill's target (a render is
  * written for its targets' props: one who only arranges does not move it to
- * others). Not strict, anyone adds them, and a target is configuration.
+ * others), a wrap's too. Not strict, anyone adds them, and a target is
+ * configuration.
  */
 export function uiKinds<Render = unknown, Target = unknown>() {
   return <const C extends string, const B extends string, const S extends boolean = false>(rights: { configure: C; behaviour: B }, options?: { strict?: S }) =>
     kinds<Render, Target, C, B, S>(rights, options?.strict === true);
 }
 
-/** What strict asks of a fill and a wrap: behaviour to add one, a fill's target behaviour too. */
+/** What strict asks of a fill and a wrap: behaviour to add one, its target behaviour too. */
 type Adding<B extends string, S extends boolean> = S extends true ? { readonly createRight: B } : Record<never, never>;
 
 type FillContract<C extends string, B extends string, S extends boolean> = Adding<B, S> & {
   readonly required: readonly ['slot', 'render'];
-  readonly patchRights: { readonly title: C; readonly order: C; readonly after: C; readonly target: S extends true ? B : C; readonly when: B; readonly render: B };
+  readonly patchRights: {
+    readonly title: C;
+    readonly order: C;
+    readonly after: C;
+    readonly before: C;
+    readonly target: S extends true ? B : C;
+    readonly when: B;
+    readonly render: B;
+  };
   readonly validate: never;
 };
 type WrapContract<C extends string, B extends string, S extends boolean> = Adding<B, S> & {
   readonly required: readonly ['wraps', 'render'];
-  readonly patchRights: { readonly order: C; readonly after: C; readonly when: B; readonly render: B };
+  readonly patchRights: { readonly order: C; readonly after: C; readonly before: C; readonly target: S extends true ? B : C; readonly when: B; readonly render: B };
   readonly validate: never;
 };
 
@@ -132,15 +159,15 @@ function kinds<Render, Target, C extends string, B extends string, S extends boo
   const Fill = defineKind<FillSpec<Props, Render, Target>>()('Fill', {
     ...adding,
     required: ['slot', 'render'],
-    patchRights: { title: configure, order: configure, after: configure, target: strict ? behaviour : configure, when: behaviour, render: behaviour },
+    patchRights: { title: configure, order: configure, after: configure, before: configure, target: strict ? behaviour : configure, when: behaviour, render: behaviour },
     validate: validateFill as never,
   }) as unknown as Kind<'Fill', FillSpec<Props, Render, Target>, FillContract<C, B, S>>;
-  const Wrap = defineKind<WrapSpec<Props, Render>>()('Wrap', {
+  const Wrap = defineKind<WrapSpec<Props, Render, Target>>()('Wrap', {
     ...adding,
     required: ['wraps', 'render'],
-    patchRights: { order: configure, after: configure, when: behaviour, render: behaviour },
+    patchRights: { order: configure, after: configure, before: configure, target: strict ? behaviour : configure, when: behaviour, render: behaviour },
     validate: validateWrap as never,
-  }) as unknown as Kind<'Wrap', WrapSpec<Props, Render>, WrapContract<C, B, S>>;
+  }) as unknown as Kind<'Wrap', WrapSpec<Props, Render, Target>, WrapContract<C, B, S>>;
   return { Slot, Fill, Wrap } as const;
 }
 

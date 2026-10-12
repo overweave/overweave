@@ -52,6 +52,73 @@ describe('order', () => {
     expect(inOrder(list).map((t) => t.name)).toEqual(['b', 'x', 'y', 'a']);
     expect(loopsOf(list)).toEqual(['x', 'y']);
   });
+
+  it('puts one with `before` right before the one it names (after those already before it); one naming none there, by order', () => {
+    const list = [
+      { name: 'title', spec: { order: 200 } },
+      { name: 'icon', spec: { order: 100 } },
+      { name: 'badge', spec: { before: 'title' } },
+      { name: 'dot', spec: { before: 'title' } },
+      { name: 'flag', spec: { before: 'icon' } },
+      { name: 'lost', spec: { before: 'nobody', order: 300 } },
+    ];
+    expect(inOrder(list).map((t) => t.name)).toEqual(['flag', 'icon', 'badge', 'dot', 'title', 'lost']);
+  });
+
+  it('puts a loop of befores and afters together, last', () => {
+    const list = [
+      { name: 'x', spec: { before: 'y' } },
+      { name: 'y', spec: { after: 'x' } },
+      { name: 'b', spec: {} },
+    ];
+    expect(inOrder(list).map((t) => t.name)).toEqual(['b', 'x', 'y']);
+    expect(loopsOf(list)).toEqual(['x', 'y']);
+  });
+
+  it('refuses a fill or a wrap anchored both after and before', () => {
+    const { app } = setup();
+    expect(app.add('Fill', 'f', { slot: 's', after: 'a', before: 'b', render: r('f') })).toMatchObject({
+      status: 'rejected',
+      errors: [{ code: 'invalid', problem: { code: 'bothAnchors', field: 'before' } }],
+    });
+    expect(app.add('Wrap', 'w', { wraps: 'f', after: 'a', before: 'b', render: r('w') })).toMatchObject({
+      status: 'rejected',
+      errors: [{ code: 'invalid', problem: { code: 'bothAnchors' } }],
+    });
+  });
+
+  it('refuses a patch that would anchor one both ways (as its contributors make it), and takes one that moves the anchor', () => {
+    const { registry, app, addon } = setup();
+    app.add('Fill', 'a', { slot: 's', render: r('a') });
+    app.add('Fill', 'b', { slot: 's', render: r('b') });
+    app.add('Fill', 'f', { slot: 's', after: 'b', render: r('f') });
+    expect(addon.patch('Fill', 'f', { before: 'a' })).toMatchObject({ status: 'rejected', errors: [{ code: 'invalid', problem: { code: 'bothAnchors' } }] });
+    expect(addon.patch('Fill', 'f', { before: 'a', after: unset }).status).toBe('included');
+    expect(names(fillsOf(registry, 's', {}))).toEqual(['f', 'a', 'b']);
+  });
+
+  it('puts a chain of befores, and one before a loop’s, each right before what it names; one before what is not shown stays where it was put', () => {
+    const chain = [
+      { name: 'c', spec: {} },
+      { name: 'b', spec: { before: 'c' } },
+      { name: 'a', spec: { before: 'b' } },
+      { name: 'z', spec: { order: 1 } },
+    ];
+    expect(inOrder(chain).map((t) => t.name)).toEqual(['z', 'a', 'b', 'c']);
+    const looped = [
+      { name: 'x', spec: { after: 'y' } },
+      { name: 'y', spec: { after: 'x' } },
+      { name: 'b', spec: { before: 'x' } },
+      { name: 'a', spec: {} },
+    ];
+    expect(inOrder(looped).map((t) => t.name)).toEqual(['a', 'b', 'x', 'y']);
+    const { registry, app } = setup();
+    app.add('Fill', 'title', { slot: 's', order: 1, render: r('t') });
+    app.add('Fill', 'pods', { slot: 's', order: 2, target: { kind: 'Pod' }, render: r('p') });
+    app.add('Fill', 'icon', { slot: 's', before: 'pods', render: r('i') });
+    const matcher = { matches: (t: { kind: string }, p: Pod) => t.kind === p.kind };
+    expect(names(fillsOf(registry, 's', { name: 'n', kind: 'Node' }, { matcher }))).toEqual(['title', 'icon']);
+  });
 });
 
 describe('a slot', () => {
@@ -90,6 +157,34 @@ describe('a slot', () => {
     expect(names(fillsOf(registry, 'header', {}))).toEqual(['a', 'c']);
     app.add('Slot', 'header', { userArranged: false });
     expect(names(fillsOf(registry, 'header', {}))).toEqual(['a', 'b', 'c']);
+  });
+
+  it('wraps a fill for some targets (by the app’s matcher) and when it holds', () => {
+    const { registry, app, addon } = setup();
+    app.add('Fill', 'app.name', { slot: 'header', render: r('name') });
+    addon.add('Wrap', 'addon.pods', { wraps: 'app.name', target: { kind: 'Pod' }, render: r('pods') });
+    addon.add('Wrap', 'addon.web', { wraps: 'app.name', when: (p: Pod) => p.name === 'web', render: r('web') });
+    const matcher = { matches: (t: { kind: string }, p: Pod) => t.kind === p.kind };
+    expect(names(wrapsOf(registry, 'app.name', { name: 'web', kind: 'Pod' }, { matcher }))).toEqual(['addon.pods', 'addon.web']);
+    expect(names(wrapsOf(registry, 'app.name', { name: 'db', kind: 'Node' }, { matcher }))).toEqual([]);
+  });
+
+  it('orders the wraps of a fill as fills are: by order, one after or before another', () => {
+    const { registry, app, addon } = setup();
+    app.add('Fill', 'app.name', { slot: 'header', render: r('name') });
+    addon.add('Wrap', 'addon.a', { wraps: 'app.name', order: 1, render: r('a') });
+    addon.add('Wrap', 'addon.c', { wraps: 'app.name', order: 2, render: r('c') });
+    addon.add('Wrap', 'addon.b', { wraps: 'app.name', before: 'addon.c', render: r('b') });
+    expect(names(wrapsOf(registry, 'app.name', {}))).toEqual(['addon.a', 'addon.b', 'addon.c']);
+  });
+
+  it('wraps for no target with no matcher, and tells it', () => {
+    const { registry, app, addon } = setup();
+    app.add('Fill', 'f', { slot: 's', render: r('f') });
+    addon.add('Wrap', 'pods', { wraps: 'f', target: { kind: 'Pod' }, render: r('w') });
+    const failures: Failure[] = [];
+    expect(names(wrapsOf(registry, 'f', { name: 'web', kind: 'Pod' }, { onError: (f) => failures.push(f) }))).toEqual([]);
+    expect(failures.map((f) => [f.phase, f.definition.name])).toEqual([['match', 'pods']]);
   });
 
   it('tells what fails — the matcher, a condition, a target with no matcher — with its phase, and does not show it', () => {
@@ -157,6 +252,11 @@ describe('the kinds', () => {
     expect(user.add('Fill', 'mine', { slot: 's', render: r('m') })).toEqual({ status: 'rejected', errors: [{ code: 'noRight', right: 'draw' }] });
     // @ts-expect-error adding a wrap is behaviour
     expect(user.add('Wrap', 'mine', { wraps: 'f', render: r('m') }).status).toBe('rejected');
+    // A wrap's target too; where it goes among others is the user's.
+    app.add('Wrap', 'w', { wraps: 'f', target: { kind: 'Pod' }, render: r('w') });
+    // @ts-expect-error a wrap's target is behaviour
+    expect(user.patch('Wrap', 'w', { target: { kind: 'Node' } })).toEqual({ status: 'rejected', errors: [{ code: 'noRight', right: 'draw', field: 'target' }] });
+    expect(user.patch('Wrap', 'w', { before: 'other' }).status).toBe('included');
     // Not strict (setup's kinds): anyone adds them.
     expect(setup().user.add('Fill', 'mine', { slot: 's', render: r('m') }).status).toBe('included');
   });

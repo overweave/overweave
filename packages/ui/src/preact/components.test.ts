@@ -22,6 +22,7 @@ import {
   useDefinitions,
   useSlotContributions,
   useSlotView,
+  Wrapped,
 } from './index.ts';
 
 /*
@@ -224,6 +225,59 @@ describe('Slot', () => {
     const now = view.container.querySelector('[data-wrap]')?.getAttribute('data-wrap') ?? '';
     expect(now.startsWith('inner:')).toBe(true);
     expect(now.split(':')[1]).not.toBe(outerId?.split(':')[1]);
+  });
+
+  it('wraps what the app draws itself by name (<Wrapped>), as a fill: in order, for its props, a failing wrap leaving it drawn', () => {
+    const { w, addon } = setup();
+    addon.add('Wrap', 'b', { wraps: 'cell', order: 1, render: wrapWith('b') });
+    addon.add('Wrap', 'i', { wraps: 'cell', order: 2, when: (p: { loud: boolean }) => p.loud, render: wrapWith('i') });
+    addon.add('Wrap', 'bad', {
+      wraps: 'cell',
+      order: 3,
+      render: () => {
+        throw new Error('wrap');
+      },
+    });
+    const html = (loud: boolean) => mount(w, h(Wrapped, { name: 'cell', props: { loud } }, 'x')).container.innerHTML;
+    expect([html(true), html(false)]).toEqual(['<i><b>x</b></i>', '<b>x</b>']);
+  });
+
+  it('replaces a fill by a wrap that draws no children: those inside it gone, those outside it (a higher order) around the replacement', () => {
+    const { w, app, addon } = setup();
+    app.add('Fill', 'f', { slot: 's', render: () => h('span', null, 'F') });
+    addon.add('Wrap', 'inner', { wraps: 'f', order: 1, render: wrapWith('i') });
+    addon.add('Wrap', 'instead', { wraps: 'f', order: 2, render: () => h('span', null, 'mine') });
+    addon.add('Wrap', 'outer', { wraps: 'f', order: 3, render: wrapWith('b') });
+    expect(renderSlot(w, 's').container.innerHTML).toBe('<b><span>mine</span></b>');
+  });
+
+  it('wraps what the app draws itself with no props (the same each time), follows its wraps as they come and go, tells one that fails', () => {
+    const { w, addon } = setup();
+    const given: unknown[] = [];
+    addon.add('Wrap', 'b', { wraps: 'cell', when: (p: unknown) => given.push(p) > 0, render: wrapWith('b') });
+    const view = mount(w, h(Wrapped, { name: 'cell' }, 'x'));
+    expect([view.container.innerHTML, given]).toEqual(['<b>x</b>', [{}]]);
+    view.act(() => addon.add('Wrap', 'i', { wraps: 'cell', order: 600, render: wrapWith('i') }));
+    expect(view.container.innerHTML).toBe('<i><b>x</b></i>');
+    view.act(() => addon.remove('Wrap', 'b'));
+    expect(view.container.innerHTML).toBe('<i>x</i>');
+    view.act(() =>
+      addon.add('Wrap', 'bad', {
+        wraps: 'cell',
+        render: () => {
+          throw new Error('no');
+        },
+      }),
+    );
+    expect([view.container.innerHTML, view.failures.map((f) => [f.phase, f.definition.name])]).toEqual(['<i>x</i>', [['render', 'bad']]]);
+  });
+
+  it('wraps what the app draws itself for some targets (by its matcher) only', () => {
+    const { w, addon } = setup();
+    addon.add('Wrap', 'pods', { wraps: 'cell', target: { kind: 'Pod' }, render: wrapWith('b') });
+    const matcher = { matches: (t: { kind: string }, p: { kind: string }) => t.kind === p.kind };
+    const html = (kind: string) => mount(w, h(Wrapped, { name: 'cell', props: { kind } }, 'x'), { matcher }).container.innerHTML;
+    expect([html('Pod'), html('Node')]).toEqual(['<b>x</b>', 'x']);
   });
 
   it('keeps a failing fill apart (told, not drawn), and draws what a failing wrap wraps', () => {

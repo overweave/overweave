@@ -1,6 +1,6 @@
 {
   "name": "@overweave/core",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Definitions of kinds, and what contributors say of them, layered: the highest priority wins, every field knows who says it, what is read holds the kind's contract — nothing else, no dependencies",
   "license": "MIT",
   "repository": {
