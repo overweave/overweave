@@ -74,7 +74,7 @@ export type ApplyError =
   | { code: 'notAMap'; field: string }
   | { code: 'missingKey'; field: string }
   | { code: 'duplicateKey'; field: string; key: string }
-  | { code: 'badData'; field: string; reason: 'cycle' | 'tooDeep' | 'sparseArray' }
+  | { code: 'badData'; field: string; reason: 'cycle' | 'tooDeep' | 'sparseArray' | 'unsetItem' }
   | { code: 'unsafeName'; field: string }
   | { code: 'unsetInAdd'; field: string }
   | { code: 'invalid'; problem: Problem }
@@ -216,14 +216,14 @@ function isPlain(value: unknown): value is Record<string, unknown> | unknown[] {
 const isUnsetItem = (v: unknown): v is { [unset]: string } => isRecord(v) && Object.hasOwn(v, unset);
 
 class BadData extends Error {
-  constructor(readonly reason: 'cycle' | 'tooDeep' | 'sparseArray') {
+  constructor(readonly reason: 'cycle' | 'tooDeep' | 'sparseArray' | 'unsetItem') {
     super(reason);
   }
 }
 
-/** A frozen copy of plain data (anything else as it is: functions, class instances, `unset`). */
+/** A frozen copy of plain data (anything else as it is: functions, class instances, `unset`); an unsetItem is a keyed list's item only, never data. */
 function frozenCopy(value: unknown, seen = new WeakSet<object>(), depth = 0): unknown {
-  if (isUnsetItem(value)) return Object.freeze({ [unset]: String(value[unset]) });
+  if (isUnsetItem(value)) throw new BadData('unsetItem');
   if (!isPlain(value)) return value;
   if (seen.has(value)) throw new BadData('cycle');
   if (depth > MAX_DEPTH) throw new BadData('tooDeep');

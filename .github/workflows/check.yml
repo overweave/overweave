@@ -1,5 +1,7 @@
-# Everything `make check` checks — lint and format, types, tests, the build, the built packages
-# imported by Node — on every push to main and every pull request; called by the release too.
+# On every push to main and every pull request; called by the release too:
+#   check  lint and format, types, tests (their coverage shown: a warning under 80%, never a failure);
+#          the packages built, imported as plain Node imports them, and packed as they would be published
+#   audit  the dependencies: no known vulnerability (high or worse), every one signed by its registry
 name: check
 
 on:
@@ -20,14 +22,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run coverage
+      # Shown on the run (its summary; a warning under 80%), never failing it.
+      - run: npm run coverage:summary
       - run: npm run build
       - run: npm run check:dist
+      - run: npm run pack
+
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund --ignore-scripts
+      # What is published depends on: any known vulnerability; the tools it is built with: high or worse.
+      - run: npm audit --omit=dev
+      - run: npm audit --audit-level=high
+      - run: npm audit signatures

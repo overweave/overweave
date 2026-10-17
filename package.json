@@ -16,6 +16,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
+    "coverage:summary": "node scripts/coverage-summary.mjs",
     "build": "npm run build -w @overweave/core && npm run build -w @overweave/ui && npm run build -w @overweave/testkit && npm run build -w @overweave/storybook",
     "check:dist": "node scripts/check-dist.mjs",
     "bench": "BENCH=1 vitest run --project 'bench:*' --reporter=dot",

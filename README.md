@@ -1,69 +1,144 @@
 # overweave
 
-> **Experimental — 0.x.** The API will change before 1.0. Not on npmjs.com: the packages are in GitHub's registry (see [Releases](#releases)).
+> **Experimental — 0.x.** The API will change before 1.0.
 
-Concepts laid over one another. An app declares kinds of definitions; its contributors — its own code, plugins, the user, a file, a server — add definitions and patch each other's fields, each at its priority and with its rights; what they say is layered, with an owner for every field. The core is only that: what the definitions mean, who contributes and when, how anything is drawn or kept is the app's.
+Overweave is a small TypeScript library for building apps that are assembled from layers. The app declares *kinds* of definitions (a column, a slot, a view); its *contributors* — its own code, plugins, the user, a config file, a server — add definitions and patch each other's fields, each at a priority and with the rights it was given. What several contributors say of one field is layered: the highest priority wins, what is under it shows again when it goes, and every field knows who set it. The core is only that. What the definitions mean, how they are drawn, kept or synced is the app's — and the other packages here are one answer for the UI.
+
+## Why
+
+- **Layered definitions.** A plugin renames a column, the user widens it, the app still owns its value. Nobody overwrites anybody: each says its part, the result is computed, and taking a contributor away (a plugin disabled, the user's settings reset) shows what was under it again.
+- **Contributors with priorities and rights.** A kind names the right a patch of each field needs (`configure`, `behaviour` — the app's words). A contributor has some rights and a priority; the core only compares them. The user at priority 1000 wins over a plugin at 200, but a plugin without `behaviour` cannot touch a render function.
+- **Every field knows who set it.** `provenanceOf(['header'])` says which contributor says the header now, by which operation, at what priority. A settings page, a debug panel, a "reset to default" button are reads, not bookkeeping.
+- **The contract always holds.** A kind's required fields, list keys and validation are checked on every change; a patch that would break a definition is rejected, and one that no longer fits after the definition changed is dropped and told.
 
 ## Packages
 
-| Folder | Package | What |
+| Package | What | README |
 |---|---|---|
-| `packages/core` | `@overweave/core` | Kinds, contributors with priorities and rights, `add` and `patch` (and `unset`), layering with provenance, contracts that always hold. No UI, no domain, no storage, no lifecycle, no dependencies |
-| `packages/ui` | `@overweave/ui`, `@overweave/ui/preact`, `@overweave/ui/overlay` | The UI's concepts with no framework (slots, fills, wraps, order, the user's arrangement); drawing them with Preact (signals over `subscribe`, `<Slot>`, error boundaries); the slots over the page, for whoever writes fills |
-| `packages/testkit` | `@overweave/testkit`, `@overweave/testkit/preact` | Testing what is built on them: a world of kinds and contributors, an addon run and stopped, what each said; a slot drawn on its own, its renders counted |
-| `packages/storybook` | `@overweave/storybook`, `/preact`, `/manager` | Storybook for what is built on them: its config (Preact, one Preact, the workspace's sources); a world drawn in a story, what failed listed below it; the Overweave panel (who says what, addons off and on, renders) |
+| `@overweave/core` | Kinds, contributors, `add` and `patch`, layering with provenance, events. No UI, no dependencies | [packages/core](packages/core/README.md), [the model](packages/core/MODEL.md) |
+| `@overweave/ui` | The UI's concepts over the core — slots, fills, wraps, order, the user's arrangement — with no framework; `/preact` draws them with Preact; `/overlay` shows the slots over the page | [packages/ui](packages/ui/README.md) |
+| `@overweave/testkit` | Testing what is built on them: a world of kinds and contributors, addons run and stopped, checks that throw; `/preact` draws a slot on its own and counts renders | [packages/testkit](packages/testkit/README.md) |
+| `@overweave/storybook` | Storybook for what is built on them: the config, a world drawn in a story, the Overweave panel | [packages/storybook](packages/storybook/README.md) |
 
-## Status
+The packages share one version and ask for one another at `^` that version. They are plain ESM with type declarations, and ship their sources beside `dist/`.
 
-- `core` — under review ([README](packages/core/README.md), [the model](packages/core/MODEL.md)).
-- `ui` — first version ([README](packages/ui/README.md)).
-- `testkit` — first version; the UI's drawing tests are written with it ([README](packages/testkit/README.md)).
-- `storybook` — first version, not yet tried in an app's Storybook ([README](packages/storybook/README.md)).
+## Install
 
-## Checks
-
-Only Docker is needed:
+The packages are on npmjs.org, public — no token, no `.npmrc`:
 
 ```bash
-make check
+npm install @overweave/core
+npm install @overweave/ui preact @preact/signals     # the UI, drawn with Preact
+npm install -D @overweave/testkit                    # tests
 ```
 
-## Benches
+Node 24 or later is used for development; the packages themselves target ES2022.
 
-The core and the UI under a real app's load — ≈ 4000 columns, 50 addons, the user's 1000 changes, 50 views of 100 filters; 100 slots of 5 fills drawn, 3000 components each reading a column; a virtual table of 10 000 pods streaming, its 60 columns from the registry — and one thing changing in it: how long, how many components drew again, how much memory a world holds and gives back.
+## Quick start
+
+A kind, three contributors, one definition they share:
+
+```ts
+import { createRegistry, defineKind } from '@overweave/core';
+
+interface Row {
+  name: string;
+}
+interface ColumnSpec {
+  header: string;
+  width?: string;
+  value: (row: Row) => string;
+}
+
+// A kind: its contract in one place. Rights are the app's words; the core only compares them.
+const Column = defineKind<ColumnSpec>()('Column', {
+  required: ['header', 'value'],
+  patchRights: { header: 'configure', width: 'configure', value: 'behaviour' },
+});
+
+const registry = createRegistry({ kinds: [Column] });
+
+const app = registry.contributor('app', { priority: 0 });
+const plugin = registry.contributor('plugin', { priority: 200, rights: ['configure'] });
+const user = registry.contributor('user', { priority: 1000, rights: ['configure'] });
+
+app.add('Column', 'name', { header: 'Name', value: (row) => row.name });
+plugin.patch('Column', 'name', { header: 'Full name' }); // { status: 'included', conflicts: [] }
+user.patch('Column', 'name', { width: '120px' });
+
+const column = registry.get('Column', 'name');
+column?.spec; //                        { header: 'Full name', value, width: '120px' }
+column?.provenanceOf(['header']); //    { contributor: 'plugin', operation: 'patch', priority: 200 }
+
+registry.subscribe((event) => {
+  // { type: 'changed', kind: 'Column', name: 'name' } …
+});
+
+plugin.dispose(); // everything it said, taken back
+registry.get('Column', 'name')?.spec.header; // 'Name'
+```
+
+The same registry drawn with Preact — a slot, a fill put in it by the app:
+
+```tsx
+import { createRegistry } from '@overweave/core';
+import { slot, uiKinds } from '@overweave/ui';
+import { fill, OverweaveProvider, type PreactComponent, Slot } from '@overweave/ui/preact';
+import { render } from 'preact';
+
+const ui = uiKinds<PreactComponent>()({ configure: 'configure', behaviour: 'behaviour' });
+const registry = createRegistry({ kinds: [ui.Slot, ui.Fill, ui.Wrap] });
+const header = slot<{ title: string }>('header');
+
+const app = registry.contributor('app', { priority: 0 });
+app.add('Fill', 'app.title', fill(header, { order: 10, render: ({ title }) => <h1>{title}</h1> }));
+
+render(
+  <OverweaveProvider registry={registry}>
+    <Slot name={header} props={{ title: 'Inbox' }} />
+  </OverweaveProvider>,
+  document.body,
+);
+```
+
+A plugin adds a second fill to `header`, or patches `app.title`'s `order`, and the slot redraws — only what changed. The UI README has the rest: wraps, the user's arrangement, error boundaries, an app that is only a mount point.
+
+## Documentation
+
+- [`@overweave/core`](packages/core/README.md) — the registry's API; [MODEL.md](packages/core/MODEL.md) states the rules one by one (layering, waiting and dropped patches, `unset`, fallbacks, events).
+- [`@overweave/ui`](packages/ui/README.md) — slots, fills, wraps, the Preact binding, the overlay.
+- [`@overweave/testkit`](packages/testkit/README.md) — worlds, addons run in every order, checks, render counts.
+- [`@overweave/storybook`](packages/storybook/README.md) — the Storybook config, `<WorldStory>`, the panel.
+
+## Development
+
+The repository is an npm workspace. Node runs in Docker through `make`, so only Docker is needed on the machine:
 
 ```bash
-make bench
+make check       # what CI checks: lint and format, types, tests, the built packages imported by Node
+make lint        # or: format, typecheck, test, coverage — one of them (format rewrites files)
+make dist        # build every package and import it as plain Node does
+make bench       # the core and the UI under a real app's load, each run against the one before
 ```
 
-The results land in `bench-results/` (not kept in git), each run read against the one before it. A time is the machine's: compare runs on one machine. What does not depend on it — that one change costs about the same in a world ten times larger — is a test (`packages/core/bench/scaling.test.ts`), run by `make check`.
-
-## Releases
-
-The packages are published to GitHub's npm registry. It asks for a token even to read: a GitHub token with `read:packages`, in the project's `.npmrc` (or, in GitHub Actions, the workflow's own token, given the package's access):
-
-```ini
-@overweave:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
+With Node 24 installed, the same as plain npm scripts:
 
 ```bash
-npm install @overweave/core@0.1.0
+npm ci
+npm run lint && npm run typecheck && npm test
+npm run build && npm run check:dist
+npm run bench
 ```
 
-Each release on GitHub also carries every package as a tarball (`npm pack`).
+Tests are Vitest, one project per package, each reading the others from their sources (the `overweave-source` export condition). Lint and format are Biome (`biome.json` also keeps the layers apart: the core imports no framework, `@overweave/ui` imports no Preact outside `/preact`).
 
-A release is made by a tag: every package at that version (`npm run check:version 0.1.0` says whether they are), then
+**Benches.** `make bench` runs the core and the UI under a real app's load — thousands of columns, fifty addons, a user's thousand changes, a hundred slots drawn, a virtual table of ten thousand rows streaming — and reports how long one change takes, how many components drew again, and what a world holds in memory. Results land in `bench-results/` (not in git), each run read against the one before. What does not depend on the machine — that one change costs about the same in a world ten times larger — is a test (`packages/core/bench/scaling.test.ts`), run by `make check`.
 
-```bash
-git tag v0.1.0
-```
+**Releases.** Every package carries the same version; `npm run check:version 0.5.0` says whether they do. A tag `v<version>` is checked as any push is, then published to npmjs.org and to GitHub Packages, and a GitHub release is made with each package's tarball attached (`.github/workflows/release.yml`). What changed in each version: [the releases](https://github.com/overweave/overweave/releases).
 
-```bash
-git push origin v0.1.0
-```
+## Contributing
 
-The `release` workflow checks it as any push is checked, publishes each package to the registry (one with a `-` under the `next` tag), then packs each and attaches them to the release (a 0.x version, or one with a `-`, as a pre-release). Every push to `main` and every pull request is checked by the `check` workflow — what `make check` checks.
+Issues and pull requests are welcome — [CONTRIBUTING.md](CONTRIBUTING.md) says how a change is made and checked. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). A vulnerability is reported privately: [SECURITY.md](SECURITY.md).
 
 ## License
 

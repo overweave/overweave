@@ -1,15 +1,24 @@
 {
   "name": "@overweave/storybook",
-  "version": "0.4.0",
-  "description": "Storybook for what is built on overweave: its config (Preact, one Preact, the workspace's sources), a world drawn in a story (kinds, addons run by the testkit's contract, a slot, what failed), and the Overweave panel (who says what, addons off and on, renders)",
+  "version": "0.5.0",
+  "description": "Storybook for what is built on overweave: its config, a world drawn in a story, and the Overweave panel.",
+  "keywords": [
+    "overweave",
+    "storybook",
+    "storybook-addon",
+    "preact"
+  ],
   "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/overweave/overweave.git",
     "directory": "packages/storybook"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "homepage": "https://github.com/overweave/overweave/tree/main/packages/storybook#readme",
   "bugs": {
@@ -46,9 +55,9 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@overweave/core": "^0.4.0",
-    "@overweave/testkit": "^0.4.0",
-    "@overweave/ui": "^0.4.0",
+    "@overweave/core": "^0.5.0",
+    "@overweave/testkit": "^0.5.0",
+    "@overweave/ui": "^0.5.0",
     "@preact/preset-vite": "^2.10.6",
     "@preact/signals": "^2.11.2",
     "@storybook/preact-vite": "^10.6.0",
@@ -75,9 +84,9 @@
     }
   },
   "devDependencies": {
-    "@overweave/core": "0.4.0",
-    "@overweave/testkit": "0.4.0",
-    "@overweave/ui": "0.4.0",
+    "@overweave/core": "0.5.0",
+    "@overweave/testkit": "0.5.0",
+    "@overweave/ui": "0.5.0",
     "@preact/preset-vite": "2.10.6",
     "@preact/signals": "2.11.2",
     "@testing-library/preact": "3.2.4",

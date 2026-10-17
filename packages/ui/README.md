@@ -1,14 +1,55 @@
 # @overweave/ui
 
-UI concepts over `@overweave/core`, with no framework — and `@overweave/ui/preact`, drawing them with Preact, each part drawn again only when what it shows changed.
+UI concepts over [`@overweave/core`](../core/README.md), with no framework — and `@overweave/ui/preact`, drawing them with Preact, each part drawn again only when what it shows changed.
+
+A **slot** is a named place in the UI. A **fill** is something put in a slot — by the app, by a plugin — with an order, and optionally a target and a condition. A **wrap** is drawn around a fill (or around anything the app draws itself and names). All three are kinds of the core: contributors add and patch them with priorities and rights, the user's arrangement of a slot (order, what is hidden) is a patch like any other, and every field knows who set it.
 
 | Entry | What | Needs |
 |---|---|---|
 | `@overweave/ui` | Kinds of the UI (`Slot`, `Fill`, `Wrap`) checking their own fields; typed slot references (`slot`); order (`order`, `after`, `before`, loops); what a slot shows for some props — targets by the app's matcher, `when`, the user's arrangement; every fill of a slot; what wraps a fill; `UiContributor` | `@overweave/core` |
-| `@overweave/ui/preact` | `<OverweaveProvider>`, `<Slot>` (fills in order, each inside its wraps, each kept apart), `<Guarded>`, `<Wrapped>` (what the app draws itself, wrapped by name like a fill), `fill` (typed by a slot, narrowed by a guard), hooks and signals following the registry; `slotTrace` (the slots drawn, for an overlay) | `preact` and `@preact/signals` (peers, optional for the main entry only) |
+| `@overweave/ui/preact` | `<OverweaveProvider>`, `<Slot>` (fills in order, each inside its wraps, each kept apart), `<Guarded>`, `<Wrapped>` (what the app draws itself, wrapped by name like a fill), `fill` (typed by a slot, narrowed by a guard), hooks and signals following the registry; `slotTrace` (the slots drawn, for an overlay) | `preact`, `@preact/signals` |
 | `@overweave/ui/overlay` | `mountSlotOverlay`: the slots over the page — where each is, its name, the empty ones | as `@overweave/ui/preact` |
 
-The packages are plain ESM: they import in Node as they do in a bundler (`make check` builds them and imports them in Node).
+## Install
+
+```bash
+npm install @overweave/ui @overweave/core
+npm install preact @preact/signals        # for @overweave/ui/preact and /overlay
+```
+
+Peers: `@overweave/core` at the same version; `preact ^10.29` and `@preact/signals ^2.11`, needed only by the Preact entries (the main entry is framework-free). Plain ESM with type declarations. Part of the [overweave](../../README.md) workspace.
+
+## A first slot
+
+```tsx
+import { createRegistry } from '@overweave/core';
+import { slot, uiKinds } from '@overweave/ui';
+import { fill, OverweaveProvider, type PreactComponent, Slot } from '@overweave/ui/preact';
+import { render } from 'preact';
+
+// The UI's kinds; the rights are the app's words.
+export const ui = uiKinds<PreactComponent>()({ configure: 'configure', behaviour: 'behaviour' });
+const registry = createRegistry({ kinds: [ui.Slot, ui.Fill, ui.Wrap] });
+
+// A slot, with the props it is drawn with.
+export const header = slot<{ title: string }>('header');
+
+const app = registry.contributor('app', { priority: 0 });
+const plugin = registry.contributor('badges', { priority: 200, rights: ['configure'] });
+const user = registry.contributor('user', { priority: 1000, rights: ['configure'] });
+
+app.add('Fill', 'app.title', fill(header, { order: 10, render: ({ title }) => <h1>{title}</h1> }));
+plugin.add('Fill', 'badges.new', fill(header, { after: 'app.title', render: () => <i>new</i> }));
+user.patch('Slot', 'header', { hidden: { 'badges.new': true } }); // waits until someone declares the slot
+app.add('Slot', 'header', { title: 'Header' });                    // now it is followed: the badge is hidden
+
+render(
+  <OverweaveProvider registry={registry}>
+    <Slot name={header} props={{ title: 'Inbox' }}>nothing here</Slot>
+  </OverweaveProvider>,
+  document.body,
+);
+```
 
 ## Kinds
 
@@ -29,11 +70,13 @@ const registry = createRegistry({ kinds: [ui.Slot, ui.Fill, ui.Wrap /*, the app'
 | `Wrap` | `order`, `after`, `before`, `target` · `when`, `render` · `wraps` | configure · behaviour · its definer's |
 
 - **Checked**: each kind checks its fields' values (an arrangement is a list of names, an order a finite number, a `when` a function…); what would break a slot is rejected, never read. Every `uiKinds()` gives the same contracts: kinds made twice are the same kinds — of one copy of `@overweave/ui` (two copies in one bundle are two sets of kinds, and the provider takes only its own).
+- **`uiKinds<Render, Target>()`**: `Render` is what a fill's `render` is (a Preact component, a function returning a string — the binding's); `Target` what a fill's `target` is (the app's: see the matcher below).
+- **Strict** (`uiKinds()(rights, { strict: true })`): a render is behaviour all through — adding a fill or a wrap needs the behaviour right, and so does a fill's or a wrap's `target`. Not strict (the default), anyone adds them, and a target is configuration.
 - **Names are one space per kind**: prefix what an addon names with its id (`images.badge`, `table.page`) — the same name of another's is `taken`.
 - **Where a fill goes** (`slot`) and **what a wrap wraps** (`wraps`) are their definer's: no right patches them.
 - **`hidden`** is a map of names: what several say of it merges name by name — an addon hides `b`, the user hides `a`, both are hidden; `{ b: false }` shows it again.
 - **A slot need not be declared**: one nobody declares shows its fills as they are. What the user arranges — `arrangement` (the fills they put first), `hidden` — is a patch of the slot's definition, and waits until someone declares it. `userArranged: false`: neither is followed.
-- **Order** is decided among all the slot's fills, then those for the props are kept: a fill `after` (or `before`) one that is not shown stays where it was put. `after` puts it right after the one it names, `before` right before it — one of them, not both (`bothAnchors`, on the spec as all its contributors make it: to move one from `after` to `before`, a patch says both, `{ before: 'x', after: unset }`). A loop of them goes last, together; what goes by one of it still goes by it.
+- **Order** is decided among all the slot's fills, then those for the props are kept: a fill `after` (or `before`) one that is not shown stays where it was put. `after` puts it right after the one it names, `before` right before it — one of them, not both (`bothAnchors`, on the spec as all its contributors make it: to move one from `after` to `before`, a patch says both, `{ before: 'x', after: unset }`). The default order is 500 (`DEFAULT_ORDER`); at one order, by name. A loop of anchors goes last, together; what goes by one of it still goes by it.
 - **`when`** is taken as true or false (`Boolean`); a `target` with no matcher is not shown, and told. A `when` that reads a signal makes the slot follow it. A wrap's `target` and `when` are a fill's: it wraps only for the props they take.
 - **Wraps nest by order**: the lowest innermost, the highest outermost. **A wrap replaces** what it wraps when it draws no `children`: wraps outside it (a higher `order`) wrap the replacement, those inside it are gone with what they wrapped — give a replacing wrap a low order (`order: 0`) and decorations (500, the default) stay around it.
 - **`wraps` names a fill** — or something the app draws itself and wraps by name with `<Wrapped>` (a table's cell, by its column's name): the same wraps, in the same order, each kept apart.
@@ -75,6 +118,16 @@ render(
 );
 ```
 
+| `<Slot>` prop | |
+|---|---|
+| `name` | The slot: a `slot()` reference (its props typed) or a name |
+| `props` | What its fills are drawn with, and chosen by (`target`, `when`). Give a stable object |
+| `children` | Drawn when the slot selects nothing (a fill that draws nothing, or failed, is still selected) |
+| `limit` | At most this many of its fills drawn, the first in its order. `limit={1}` makes a slot of one: a default fill with a high order (1000) yields to any other put in the slot, and shows again when that goes |
+| `retryKey` | Another value tries what failed in the slot again — nothing else |
+
+**The provider** gives the slots below the registry (one with the UI's kinds: another `Slot` kind under that name throws), the app's `matcher` (`{ matches(target, props) }` — the only place targets are interpreted), `onError`, and a `trace` for the overlay. `useOverweave()` reads it (`OverweaveContext`).
+
 Something the app draws itself is wrapped by name like a fill — its children inside the Wraps of that name for the props (stable, as a slot's; none: no props):
 
 ```tsx
@@ -107,11 +160,11 @@ The guarantee holds while what the slot is given keeps its identity (its props, 
 - Not caught: event handlers, promises, timers — the app's.
 - The slot's `children` are drawn when it **selects** nothing: a fill that draws nothing, or failed, is still selected.
 
-**`<Guarded definition={column} fallback={…}>`** (its fallback is to be safe: it is not kept apart) keeps any definition's drawing apart the same way — a column's cell, a section inside a fill: what throws is told as that definition's (not as the fill around it), and it is tried again when that definition changes. Put it where a contribution is drawn inside something else's render.
+**`<Guarded definition={column} fallback={…}>`** (its fallback is to be safe: it is not kept apart) keeps any definition's drawing apart the same way — a column's cell, a section inside a fill: what throws is told as that definition's (not as the fill around it), and it is tried again when that definition changes. Put it where a contribution is drawn inside something else's render. Its own `retryKey` (a page's path) tries it again apart from the slot's.
 
 **For a slot's tools**: `useSlotView(slot, props)` — what it shows and what the user hid, followed; `useSlotContributions(slot)` — every fill of it, whatever its conditions (a settings page lists these, not what one set of props selects).
 
-**Reading**: `useDefinition`, `useDefinitions`; `definitionSignal`, `listSignal`, `versionOf`, `selection` anywhere. A definition read is the same object until it changes — that is what all of this compares. When the registry is disposed, what was read through them is gone too; a provider over it — given before or after — draws nothing, and throws nothing.
+**Reading**: `useDefinition`, `useDefinitions` in a component; `definitionSignal`, `listSignal`, `versionOf`, `definitionVersionOf` anywhere a signal is read. A definition read is the same object until it changes — that is what all of this compares. When the registry is disposed, what was read through them is gone too; a provider over it — given before or after — draws nothing, and throws nothing.
 
 ## An app that is only a mount point
 
@@ -121,6 +174,8 @@ The app need draw nothing itself: it makes the registry, decides which addons it
 - **An addon says what it adds at once**, and gives back what to let go of when it stops (subscriptions, timers). A setup that returns a promise is refused. Stopping it twice does nothing; what it said is taken back even if its cleanup throws.
 - **The order addons start in does not matter**: `images` starts before `table` here; its patch of `status` waits for `table`'s add.
 - **The contributor is typed by the addon's kinds and the rights it asks for** (`UiContributor<typeof ui, KS, R>`); a list of addons lets go of those types (`AnyAddon`), and the shell's one cast hands each addon the contributor made for it.
+
+This is also the contract [`@overweave/testkit`](../testkit/README.md) runs addons by (`world.run`, `everyOrder`) and [`@overweave/storybook`](../storybook/README.md) draws them by (`<WorldStory>`).
 
 ```ts
 import { type AnyKind, createRegistry, defineKind } from '@overweave/core';
@@ -260,19 +315,19 @@ Drawn: `Pods` over a table `Name | Image | State` — `web-1 | nginx:1.27 | Runn
 
 ## Data that streams: tables, pages, virtual rows
 
-The registry holds how the UI is — its columns, fills, views, the user's arrangement — never the data it shows. Pods, rows, a watch's events live in the app's data: one signal per row (by its uid), the order a signal of its own. A table reads its columns from the registry (`useDefinitions(Column)`) and its rows from the data, and draws only the rows in view:
+The registry holds how the UI is — its columns, fills, views, the user's arrangement — never the data it shows. Rows, a watch's events live in the app's data: one signal per row (by its id), the order a signal of its own. A table reads its columns from the registry (`useDefinitions(Column)`) and its rows from the data, and draws only the rows in view:
 
 - a row's cells are a component that reads its row's signal — drawn again when that row changes, and only then;
 - that component is kept when the table draws again (it scrolled, a row came): a class with `shouldComponentUpdate` on the row and the columns (signals follow function components, so the cells are one);
 - the columns shown are derived once per list of columns (the registry keeps the list's identity until a column changes).
 
-Measured (`make bench`, `packages/ui/bench/table.bench.ts`: 10 000 pods, 60 columns of which 50 are addons', 40 rows in view):
+Measured (`make bench`, `packages/ui/bench/table.bench.ts`: 10 000 rows, 60 columns of which 50 are addons', 40 rows in view):
 
 | What happens | What draws again | The registry |
 |---|---|---|
-| A pod in view changes | its row | not asked |
-| A pod out of view changes; a second's 100 at once | nothing | not asked |
-| A pod comes | the table (the window), no row | not asked |
+| A row in view changes | its row | not asked |
+| A row out of view changes; a second's 100 at once | nothing | not asked |
+| A row comes | the table (the window), no row | not asked |
 | Scrolled a row, a page | the rows that came into view | not asked |
 | The user hides a column; an addon adds one | the header, the rows in view | one change |
 
@@ -287,11 +342,13 @@ import { mountSlotOverlay } from '@overweave/ui/overlay';
 import { OverweaveProvider, slotTrace } from '@overweave/ui/preact';
 
 const trace = slotTrace();
-mountSlotOverlay({ trace });
+const overlay = mountSlotOverlay({ trace });            // { toggle(open?), opened, stop() }; options: hotkey (null: none), open, parent
 render(<OverweaveProvider registry={registry} trace={trace}>…</OverweaveProvider>, root);
 ```
 
-The page is left as it is: a slot's elements are found in Preact's tree when the overlay asks for them. What a fill puts elsewhere (a portal) is not its slot's.
+The page is left as it is: a slot's elements are found in Preact's tree when the overlay asks for them. What a fill puts elsewhere (a portal) is not its slot's. The overlay draws in a shadow root of its own, as a manual popover (over dialogs), out of the pointer's way.
+
+The trace reads Preact 10's own tree (its internal fields): a Preact other than 10 is not supported by it — the slots still draw, the overlay finds nothing.
 
 ## Without a framework
 
@@ -306,8 +363,21 @@ fillsOf(registry, header, props, options).map((fill) => fill.spec.render(props))
 
 A failure of choosing (`match`, `when`) is told once per definition and phase for one `options` object: keep one, not a new literal each call.
 
-## Checks
+| `@overweave/ui` | |
+|---|---|
+| `uiKinds<Render, Target>()(rights, { strict }?)` | The three kinds, their rights named |
+| `slot<P>(name)`, `slotFill(slot, spec)` | A typed slot reference; a fill of it (no framework) |
+| `fillsOf(registry, slot, props, options?)` | What a slot shows for some props, in order |
+| `slotView(registry, slot, props, options?)` | The same, with the slot's definition and what the user hid (`{ slot, selected, userHidden }`) |
+| `slotContributions(registry, slot)` | Every fill of a slot, whatever its conditions, and the slot's definition |
+| `wrapsOf(registry, name, props, options?)` | What wraps a fill (or a name), the innermost first |
+| `inOrder(list)`, `loopsOf(list)`, `DEFAULT_ORDER` | Placement: things in order; the names in a loop of anchors; 500 |
+| `Matcher`, `SlotOptions`, `Failure`, `FailurePhase`, `SlotView`, `SlotRef`, `SlotSpec`, `FillSpec`, `WrapSpec`, `Placement`, `UiKinds`, `UiKindsMap`, `UiContributor`, `RenderOf`, `TargetOf` | Types |
 
-```bash
-make check
-```
+## Development
+
+See the [workspace README](../../README.md#development). The drawing tests are written with [`@overweave/testkit`](../testkit/README.md).
+
+## License
+
+MIT — [LICENSE](LICENSE).

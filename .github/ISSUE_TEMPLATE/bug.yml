@@ -1,0 +1,31 @@
+name: Bug
+description: Something does not work as documented.
+labels: [bug]
+body:
+  - type: input
+    id: package
+    attributes:
+      label: Package and version
+      placeholder: "@overweave/ui 0.5.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The smallest code that shows it — a test is best. Kinds, contributors, priorities and rights involved.
+      render: ts
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "Node 24.x / Chrome 140, Preact 10.x, Vite 8"

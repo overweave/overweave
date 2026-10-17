@@ -1,7 +1,8 @@
-# A release for a tag `v<version>` (the version every package has): checked as a push is, each
-# package published to GitHub's npm registry (npm.pkg.github.com, under @overweave), then a release on
-# GitHub with each package's tarball (`npm pack`) attached. Nothing goes to npmjs.com. A 0.x version
+# A release for a tag `v<version>` (the version every package has): checked as a push is, then each
+# package published to npmjs.com (by trusted publishing: no token, with provenance) and to GitHub's npm
+# registry, then a release on GitHub with each package's tarball (`npm pack`) attached. A 0.x version
 # is released as a pre-release; a version with a `-` is published under the `next` tag, not `latest`.
+# Run again after a failure, it publishes only what is not there yet.
 name: release
 
 on:
@@ -19,33 +20,48 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: release
     permissions:
       contents: write
       packages: write
+      # npmjs.com's trusted publishing, and the provenance it signs.
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: npm
-          registry-url: https://npm.pkg.github.com
-          scope: '@overweave'
+          registry-url: https://registry.npmjs.org
       - run: npm ci --no-audit --no-fund
       - name: The tag is every package's version
         run: node scripts/check-version.mjs "${GITHUB_REF_NAME#v}"
       - run: npm run build
       - run: npm run pack
-      - name: The packages, in GitHub's registry
+      - name: The packages, on npmjs.com and in GitHub's registry
         env:
-          NODE_AUTH_TOKEN: ${{ github.token }}
+          GITHUB_REGISTRY_TOKEN: ${{ github.token }}
         run: |
           tag="latest"
           case "$GITHUB_REF_NAME" in *-*) tag="next" ;; esac
-          npm publish --workspaces --tag "$tag"
+          github="https://npm.pkg.github.com"
+          # The token's name written, not the token: npm reads it from the environment as it publishes.
+          # shellcheck disable=SC2016
+          npm config set "//npm.pkg.github.com/:_authToken" '${GITHUB_REGISTRY_TOKEN}'
+          for dir in packages/*/; do
+            name="$(node -p "require('./$dir/package.json').name")"
+            version="$(node -p "require('./$dir/package.json').version")"
+            if npm view "$name@$version" version >/dev/null 2>&1; then echo "$name@$version: on npmjs.com already"
+            else npm publish "./$dir" --access public --provenance --tag "$tag"; fi
+            if npm view "$name@$version" version --registry "$github" >/dev/null 2>&1; then echo "$name@$version: in GitHub's registry already"
+            else npm publish "./$dir" --registry "$github" --tag "$tag"; fi
+          done
       - name: The release, its packages attached
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           pre=""
           case "$GITHUB_REF_NAME" in v0.*|*-*) pre="--prerelease" ;; esac
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && exit 0
           gh release create "$GITHUB_REF_NAME" packed/*.tgz --title "$GITHUB_REF_NAME" --generate-notes --verify-tag $pre

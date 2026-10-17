@@ -8,7 +8,16 @@ Storybook for what is built on overweave: its config, a world drawn in a story �
 | `@overweave/storybook/preact` | `<WorldStory>`, `setPreviewChannel` | `@overweave/testkit`, `@overweave/ui`, `preact`, `@preact/signals` |
 | `@overweave/storybook/manager` | The Overweave panel (Storybook loads it: `storybook()` adds the addon) | Storybook's manager (React and its API are there; `react` an optional peer) |
 
-How the stories look — styles, a shadow root, themes, fonts, Storybook addons such as a11y — is the app's: its `.storybook/preview.tsx` and the `addons` it gives. What an addon is, is the app's too: a story runs any `{ id, setup, grant }` the way `everyOrder` does.
+How the stories look — styles, a shadow root, themes, fonts, Storybook addons such as a11y — is the app's: its `.storybook/preview.tsx` and the `addons` it gives. What an addon is, is the app's too: a story runs any `{ id, setup, grant }` the way [`@overweave/testkit`](../testkit/README.md)'s `everyOrder` does.
+
+## Install
+
+```bash
+npm install -D @overweave/storybook @overweave/testkit @overweave/ui @overweave/core
+npm install -D storybook @storybook/preact-vite @preact/preset-vite vite preact @preact/signals
+```
+
+Peers: the three overweave packages at the same version; `preact ^10.29` and `@preact/signals ^2.11`; for the config entry, `storybook ^10.6`, `@storybook/preact-vite ^10.6`, `@preact/preset-vite ^2.10` and `vite ^8.3` (optional peers: a story file needs none of them); `react >= 18` is the manager's, and Storybook brings it. Part of the [overweave](../../README.md) workspace.
 
 ## The config
 
@@ -25,7 +34,7 @@ export default storybook({
 });
 ```
 
-It adds the Overweave panel (`panel: false` leaves it out), sets Preact's renderer, JSX as Preact's (`@preact/preset-vite` — not added again when the app's `vite.config`, which Storybook takes too, has it; `react` left as React, Storybook's docs being drawn with it), one Preact and one `@preact/signals` (and its core) for the stories, the UI and the renderer (two would not know each other's elements), no telemetry.
+It adds the Overweave panel (`panel: false` leaves it out), sets Preact's renderer, JSX as Preact's (`@preact/preset-vite` — not added again when the app's `vite.config`, which Storybook takes too, has it; `react` left as React, Storybook's docs being drawn with it), one Preact and one `@preact/signals` (and its core) for the stories, the UI and the renderer (two would not know each other's elements), no telemetry. It gives back a `StorybookConfig` (`framework`, `stories`, `addons`, `core`, `viteFinal`) — extend it if the app needs more of Storybook's.
 
 Storybook's manager loads the panel from the package as built (`dist/manager.js`): in a workspace, build `@overweave/storybook` before starting Storybook (the source conditions are the preview's, not the manager's).
 
@@ -69,13 +78,16 @@ export const WithImages: StoryObj<{ rows: number }> = {
 |---|---|
 | `ui`, `kinds` | The UI's kinds (as `uiKinds` gives them) and one's own: the world is typed by them |
 | `given` | What is there before any addon runs, at once: `(w) => w.as('core').add('Column', 'name', …)` — typed by the world's kinds; run when the world is made (a new `given` changes nothing until it is made again); a promise is listed as a failure |
-| `addons` | Run in this order; one that fails to start is listed, the others run |
+| `addons` | Run in this order (`AddonRun`: `{ id, setup, grant? }`); one that fails to start is listed, the others run |
 | `slot`, `props`, `retryKey` | The slot drawn and its props (the story's args; a typed slot asks for them); without a slot, the children are drawn |
+| `children` | Any tree under the world's provider — drawn when no slot is given, or as the slot's children when it selects nothing |
 | `matcher`, `onError` | The app's matcher; where failures go too |
 
 The world is made when the story is drawn (never by a drawing given up), and again only when its kinds or its addons change (by id, setup and grant) — new args draw the slot again in the same world. The old world is stopped before the new one starts, and its tree drawn anew: nothing below holds on to a world let go of. With the story, the world is let go of: every addon stopped. What failed — the world's making (kinds that do not go together), `given`, an addon's start, a fill's or a wrap's drawing, a condition — is listed below the story (`[data-overweave-problems]`, unstyled: how it looks is the app's), each failure once however often it fails again, before the app's `onError` is called.
 
 A fill on its own is its addon run alone over its slot.
+
+Types: `WorldStoryProps<U, KS, P>`, `WorldOf<U, KS>` (the world `given` is handed), `UiKindsOf`, `Problem` (`{ what, error }`).
 
 ## The Overweave panel
 
@@ -91,10 +103,14 @@ A tab beside Controls and Actions, for the story's `<WorldStory>` — several on
 
 The story tells the panel over Storybook's channel when its registry changes or something fails; the panel asks again every second while it is open, renders being counted between changes, and draws nothing again when nothing changed. A world that answers two askings no more (gone, or the page drawn again) is forgotten. What could not be read is told as what failed, never thrown into the channel. Outside Storybook (no channel) nothing is told and nothing counted. Which addons are off is kept by the story's `<WorldStory>` for as long as it is drawn: drawn anew (another story), all are on.
 
-Storybook and React are not installed here: the manager entry is written against the little of their API it uses (`addons.register`, `addons.add` with `types.PANEL`, `addons.getChannel`, `createElement`), and the panel itself is Preact, tested with a channel of its own. Not yet tried in a running Storybook.
+The protocol is exported for tools of one's own: `EVENTS` (`overweave/state`, `overweave/gone`, `overweave/request`, `overweave/toggle`, `overweave/reset-counts`), the `InspectorState` and `AddonState` a story tells, the `Channel` it needs (`on`, `off`, `emit`).
 
-## Checks
+Storybook and React are not installed here: the manager entry is written against the little of their API it uses (`addons.register`, `addons.add` with `types.PANEL`, `addons.getChannel`, `createElement`), and the panel itself is Preact, tested with a channel of its own. **Not yet tried in a running Storybook** — reports welcome.
 
-```bash
-make check
-```
+## Development
+
+See the [workspace README](../../README.md#development).
+
+## License
+
+MIT — [LICENSE](LICENSE).

@@ -25,8 +25,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.{ts,tsx}'],
-      exclude: ['**/*.test.{ts,tsx}'],
-      reporter: ['text-summary', 'text'],
+      // Nothing to test in them: re-exports, types, Storybook's manager (drawn in a running Storybook only).
+      exclude: ['**/*.test.{ts,tsx}', '**/index.ts', '**/*.d.ts', 'packages/storybook/src/manager.ts'],
+      // json-summary: what CI shows of it (scripts/coverage-summary.mjs).
+      reporter: ['text-summary', 'text', 'json-summary'],
     },
   },
 });

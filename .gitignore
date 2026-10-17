@@ -1,7 +1,30 @@
+# Installed and built
 node_modules/
 dist/
-coverage/
-*.log
-.DS_Store
-bench-results/
+*.tsbuildinfo
+storybook-static/
+
+# Packed (npm run pack), reports, caches
 packed/
+*.tgz
+coverage/
+bench-results/
+.cache/
+.vite/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Secrets and local settings: never in the repository
+.env
+.env.*
+.npmrc
+
+# Editors and systems
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db

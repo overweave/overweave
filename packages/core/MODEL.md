@@ -12,6 +12,7 @@ How definitions are contributed, layered and read. The rules below are tested in
 | right | A word of the app's: a kind names the right a patch of each field (and an add) needs; a contributor has some |
 | contribution | What one contributor says of one definition by one operation (`add` or `patch`) |
 | definer | The contributor whose `add` a definition is |
+| fallback | An `add` that stands only while nobody else adds the definition (`{ fallback: true }`) |
 | leaf | What is layered: a field; a map's key; a keyed list's item, and each of its fields; a collection's container |
 | included / waiting | A patch counted, or kept until the definition's add comes |
 
@@ -36,9 +37,10 @@ A contributor has at most one add and one patch per definition; saying it again 
 | Operation | Rule |
 |---|---|
 | `add` | The whole definition. **One definer per (kind, name):** another's add is rejected (`taken`), before anything else is checked. Checked as it will be read: required fields, items' keys (no two alike) and required fields, `validate`. |
+| `add`, fallback | `add(kind, name, spec, { fallback: true })`: a default that yields. It is read only while no other add is there; another's add takes its place (the patches moved over to it), and when that add goes the fallback is read again. One fallback per (kind, name), as one definer (`taken`). Checked as any add is. Added under another's add: kept, `waiting`, nothing read differently, nothing told. |
 | `patch` | Only fields its contributor has the rights for (`noRight`; no right opens it: `notPatchable`). It replaces the contributor's patch before; `{}` takes it back. |
 
-**Rejected** (nothing changes): a field without the right; a collection of the wrong shape (`notAList`, `notAMap`, `missingKey`, `duplicateKey`); a name that would reach a prototype (`unsafeName`); data that cannot be copied (`badData`: a cycle, deeper than 64, a sparse array); `unset` in an add; an unknown kind; a disposed contributor or registry; and a patch that would break the definition (`required`, `invalid`). Errors are codes.
+**Rejected** (nothing changes): a field without the right; a collection of the wrong shape (`notAList`, `notAMap`, `missingKey`, `duplicateKey`); a name that would reach a prototype (`unsafeName`); data that cannot be copied (`badData`: a cycle, deeper than 64, a sparse array, an `unsetItem` anywhere but as a keyed list's item); `unset` in an add; an unknown kind; a disposed contributor or registry; and a patch that would break the definition (`required`, `invalid`). Errors are codes.
 
 ## The contract always holds
 
@@ -74,4 +76,4 @@ What is read is the same whatever the order contributions came in: values, the o
 - Every leaf has its **provenance**: `{ contributor, operation, priority }`; `provenanceOf(path)`: a field of parts, the part that wins over the others. A leaf taken away is read with the value `unset`.
 - A definition read is **the same object** until it changes (a kind's list too): who compares can compare by identity.
 - `subscribe(listener)` is told what happens — `changed`, `rejected`, `dropped`, `conflict`, and last `disposed` (everything read from it is gone; disposed from a listener too) — once the registry is consistent, in order; what a listener does is told after it; a listener that throws changes nothing. `batch(fn)` tells after several changes.
-- `inspect(kind, name)` shows every contribution to a definition — waiting too — with its priority and tie-break; `contributions(id)`, everything a contributor says now, in the order it first touched each definition (none once it is gone).
+- `inspect(kind, name)` shows every contribution to a definition — waiting too, a fallback under another's add among them — with its priority and tie-break; `contributions(id)`, everything a contributor says now, in the order it first touched each definition (none once it is gone).

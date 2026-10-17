@@ -22,4 +22,4 @@ export {
   type WrapSpec,
 } from './kinds.ts';
 export { DEFAULT_ORDER, inOrder, loopsOf } from './order.ts';
-export { type Failure, type FailurePhase, fillsOf, type Matcher, report, type SlotOptions, type SlotView, slotContributions, slotView, wrapsOf } from './slots.ts';
+export { type Failure, type FailurePhase, fillsOf, type Matcher, type SlotOptions, type SlotView, slotContributions, slotView, wrapsOf } from './slots.ts';

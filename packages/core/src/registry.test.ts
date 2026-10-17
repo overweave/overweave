@@ -95,6 +95,18 @@ describe('add', () => {
       status: 'rejected',
       errors: [{ code: 'badData', field: 'values', reason: 'sparseArray' }],
     });
+    // An unsetItem takes a keyed list's item away: anywhere else it is no data (never kept, never compared as one).
+    expect(core.add('Board', 'i', { title: 'I', subtitle: unsetItem('a') } as never)).toEqual({
+      status: 'rejected',
+      errors: [{ code: 'badData', field: 'subtitle', reason: 'unsetItem' }],
+    });
+    expect(core.add('Board', 'j', { title: 'J', values: { x: [unsetItem('a')] }, regions: [{ id: 'r', layout: unsetItem('b') }] } as never)).toEqual({
+      status: 'rejected',
+      errors: [
+        { code: 'badData', field: 'values', reason: 'unsetItem' },
+        { code: 'badData', field: 'regions', reason: 'unsetItem' },
+      ],
+    });
     expect(core.add('Board', 'u', { title: unset } as never)).toEqual({ status: 'rejected', errors: [{ code: 'unsetInAdd', field: 'title' }] });
     expect(core.add('Board', 'p', JSON.parse('{"title": "P", "__proto__": {"polluted": true}}'))).toEqual({
       status: 'rejected',

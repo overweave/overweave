@@ -1,0 +1,17 @@
+name: Feature
+description: Something overweave could do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need
+      description: The problem, in your app's terms — not yet the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How it could look
+      description: The API you have in mind, if any, and what you do today instead.
+      render: ts
