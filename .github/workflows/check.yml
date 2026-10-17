@@ -2,6 +2,9 @@
 #   check  lint and format, types, tests (their coverage shown: a warning under 80%, never a failure);
 #          the packages built, imported as plain Node imports them, and packed as they would be published
 #   audit  the dependencies: no known vulnerability (high or worse), every one signed by its registry
+#   review a pull request's new dependencies: none with a known vulnerability (moderate or worse); MIT
+#          only — those under another license listed by name (the tools there were before it, nothing
+#          of what is published)
 name: check
 
 on:
@@ -55,3 +58,30 @@ jobs:
       - run: npm audit --omit=dev
       - run: npm audit --audit-level=high
       - run: npm audit signatures
+
+  review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          allow-licenses: MIT
+          # Under another license, taken by name: TypeScript, Vite's and Testing Library's own dependencies.
+          allow-dependencies-licenses: >-
+            pkg:npm/aria-query, pkg:npm/baseline-browser-mapping, pkg:npm/boolbase, pkg:npm/caniuse-lite,
+            pkg:npm/css-select, pkg:npm/css-what, pkg:npm/detect-libc, pkg:npm/domelementtype,
+            pkg:npm/domhandler, pkg:npm/domutils, pkg:npm/electron-to-chromium, pkg:npm/entities,
+            pkg:npm/expect-type, pkg:npm/lightningcss, pkg:npm/lightningcss-android-arm64,
+            pkg:npm/lightningcss-darwin-arm64, pkg:npm/lightningcss-darwin-x64,
+            pkg:npm/lightningcss-freebsd-x64, pkg:npm/lightningcss-linux-arm-gnueabihf,
+            pkg:npm/lightningcss-linux-arm64-gnu, pkg:npm/lightningcss-linux-arm64-musl,
+            pkg:npm/lightningcss-linux-x64-gnu, pkg:npm/lightningcss-linux-x64-musl,
+            pkg:npm/lightningcss-win32-arm64-msvc, pkg:npm/lightningcss-win32-x64-msvc, pkg:npm/lru-cache,
+            pkg:npm/nth-check, pkg:npm/picocolors, pkg:npm/semver, pkg:npm/source-map, pkg:npm/source-map-js,
+            pkg:npm/typescript, pkg:npm/yallist
+          comment-summary-in-pr: on-failure

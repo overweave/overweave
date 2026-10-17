@@ -1,5 +1,9 @@
 # overweave
 
+[![check](https://github.com/overweave/overweave/actions/workflows/check.yml/badge.svg)](https://github.com/overweave/overweave/actions/workflows/check.yml)
+[![npm](https://img.shields.io/npm/v/@overweave/core)](https://www.npmjs.com/package/@overweave/core)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/overweave/overweave/badge)](https://scorecard.dev/viewer/?uri=github.com/overweave/overweave)
+
 > **Experimental — 0.x.** The API will change before 1.0.
 
 Overweave is a small TypeScript library for building apps that are assembled from layers. The app declares *kinds* of definitions (a column, a slot, a view); its *contributors* — its own code, plugins, the user, a config file, a server — add definitions and patch each other's fields, each at a priority and with the rights it was given. What several contributors say of one field is layered: the highest priority wins, what is under it shows again when it goes, and every field knows who set it. The core is only that. What the definitions mean, how they are drawn, kept or synced is the app's — and the other packages here are one answer for the UI.

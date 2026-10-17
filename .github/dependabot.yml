@@ -1,11 +1,14 @@
 # Updates proposed once a week: the workflows' actions, and the workspace's npm packages (grouped, so one
-# pull request a week at most for each; a major version of a package on its own).
+# pull request a week at most for each; a major version of a package on its own) — a version only once
+# it is a week old (a bad release is mostly taken back by then). Security updates come at once.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ['*']
@@ -14,6 +17,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       minor-and-patch:
         update-types: [minor, patch]
