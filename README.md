@@ -1,3 +1,5 @@
+<p align="center"><img src=".github/logo.svg" alt="" width="120"></p>
+
 # overweave
 
 [![check](https://github.com/overweave/overweave/actions/workflows/check.yml/badge.svg)](https://github.com/overweave/overweave/actions/workflows/check.yml)
